@@ -23,7 +23,8 @@ jobs:
           enable-cache: true
       - name: Install locked runtime
         run: |
-          uv venv --python 3.11
+          uv python install 3.11.14
+          uv venv --python 3.11.14
           uv pip install --python .venv/bin/python --require-hashes -r runtime/requirements.lock.txt
       - name: Python tests
         run: .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
