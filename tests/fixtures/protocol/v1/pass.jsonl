@@ -1,0 +1,12 @@
+{"schema_version":1,"run_id":"fixture-pass","sequence":1,"timestamp":"2026-07-09T22:00:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":2,"timestamp":"2026-07-09T22:00:00.100Z","type":"capability.reported","stage":"inspect","payload":{"status":"pass","model_type":"llama","operations":{"quantize":"supported"}}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":3,"timestamp":"2026-07-09T22:00:00.200Z","type":"plan.ready","stage":"plan","payload":{"step_count":1,"estimated_disk_bytes":4096}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":4,"timestamp":"2026-07-09T22:00:00.300Z","type":"stage.started","stage":"fixture","payload":{"display_name":"Deterministic fixture stage"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":5,"timestamp":"2026-07-09T22:00:00.400Z","type":"stage.progress","stage":"fixture","payload":{"completed":1,"total":2,"unit":"steps"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":6,"timestamp":"2026-07-09T22:00:00.500Z","type":"stage.log","stage":"fixture","payload":{"stream":"stdout","message":"fixture midpoint"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":7,"timestamp":"2026-07-09T22:00:00.600Z","type":"artifact.discovered","stage":"fixture","payload":{"relative_path":"artifacts/candidate","kind":"candidate","complete":true}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":8,"timestamp":"2026-07-09T22:00:00.700Z","type":"stage.completed","stage":"fixture","payload":{"exit_code":0}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":9,"timestamp":"2026-07-09T22:00:00.800Z","type":"metric.recorded","stage":"qualify","payload":{"name":"fixture_score","value":1,"unit":"ratio","source":"evaluations/fixture.json"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":10,"timestamp":"2026-07-09T22:00:00.900Z","type":"evaluation.recorded","stage":"qualify","payload":{"relative_path":"evaluations/fixture.json","parent":"fixture-parent"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":11,"timestamp":"2026-07-09T22:00:01.000Z","type":"promotion.gate","stage":"qualify","payload":{"gate":"structural","status":"passed","evidence":"evaluations/fixture.json"}}
+{"schema_version":1,"run_id":"fixture-pass","sequence":12,"timestamp":"2026-07-09T22:00:01.100Z","type":"run.completed","stage":null,"payload":{"state":"completed","qualified":true}}

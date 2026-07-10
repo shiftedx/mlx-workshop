@@ -1,0 +1,4 @@
+{"schema_version":1,"run_id":"fixture-cancelled","sequence":1,"timestamp":"2026-07-09T22:04:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-cancelled","sequence":2,"timestamp":"2026-07-09T22:04:00.100Z","type":"stage.started","stage":"fixture","payload":{"display_name":"Cancellable fixture stage","pid":4242}}
+{"schema_version":1,"run_id":"fixture-cancelled","sequence":3,"timestamp":"2026-07-09T22:04:00.200Z","type":"run.state","stage":null,"payload":{"state":"cancelling","signal":"SIGTERM","pid":4242}}
+{"schema_version":1,"run_id":"fixture-cancelled","sequence":4,"timestamp":"2026-07-09T22:04:00.300Z","type":"run.cancelled","stage":null,"payload":{"state":"cancelled","last_completed_stage":"plan","partial_outputs":["artifacts/partial"],"resumability":"safe"}}

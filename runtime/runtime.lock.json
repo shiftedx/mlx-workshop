@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "runtime_id": "mlx-workshop-runtime-0.1.0-beta.1-arm64",
+  "status": "design-lock-not-yet-bundled",
+  "platform": {
+    "architecture": "arm64",
+    "minimum_macos": "14.0"
+  },
+  "python": {
+    "implementation": "CPython",
+    "version": "3.11.14"
+  },
+  "requirements_lock": {
+    "path": "runtime/requirements.lock.txt",
+    "sha256": "25ce3dd9783ceb6a80f1f3e9c6f2bf23812624ff65ed0847886ee8fa3100f18e"
+  },
+  "packages": {
+    "huggingface-hub": "1.20.1",
+    "mlx": "0.31.2",
+    "mlx-lm": "0.31.3",
+    "safetensors": "0.8.0",
+    "transformers": "5.12.1"
+  },
+  "driver_files": {
+    "scripts/inspect_mlx_model.py": "c317c7ce8326d8a8409867c2a2043ed382ecee976f1ac325d4f1a0655c5788f6",
+    "scripts/mlx_workflow_cli.py": "7f588ecefcef2aa87da07ba7ca8afd32001e305733c60c582fa6bcac7585f787",
+    "scripts/workflow_behavior.py": "8a9b6d1a12223039efac544547367122e26223791e84a7d36788a3f6900c24ca",
+    "scripts/workflow_executor.py": "f2abe1c8a9a35521484927b4c0424848ad1c06e21a0534cb905c7b63ad7c5372",
+    "scripts/workflow_host.py": "3bef434c5f6c70b0c021f56727044316f2c05bc8064ef48e334d5054eb52e398",
+    "scripts/workflow_plan.py": "e9761ee8566e2bca154e29373077ade3d280e88cb9a6b927738286cde2136af8",
+    "scripts/workflow_promotion.py": "ca076eb5e99b3986d59cb57812df95f8a8d618ed3e044669ad44d97494ea3fd2",
+    "scripts/workflow_protocol.py": "8547d8b9dc631368e45ccac50df0299be5bda1b920a0c9afcb0596edb0d0805d",
+    "scripts/workflow_real_qualification.py": "00d0bdfd815cbd280510bc2bd18b1fcb1b544a24588e52efb017e3efe4838d63",
+    "scripts/workflow_sensitivity.py": "2cb7dd1171d9ee18da3c5d1166e7999c108d93fda78b4de6936962579e2d9802"
+  }
+}

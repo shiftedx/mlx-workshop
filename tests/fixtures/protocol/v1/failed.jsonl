@@ -1,0 +1,4 @@
+{"schema_version":1,"run_id":"fixture-failed","sequence":1,"timestamp":"2026-07-09T22:03:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-failed","sequence":2,"timestamp":"2026-07-09T22:03:00.100Z","type":"stage.started","stage":"fixture","payload":{"display_name":"Failing fixture stage"}}
+{"schema_version":1,"run_id":"fixture-failed","sequence":3,"timestamp":"2026-07-09T22:03:00.200Z","type":"stage.failed","stage":"fixture","payload":{"exit_code":23,"code":"fixture-failure","message":"Deterministic failure","resumability":"unsafe"}}
+{"schema_version":1,"run_id":"fixture-failed","sequence":4,"timestamp":"2026-07-09T22:03:00.300Z","type":"run.state","stage":null,"payload":{"state":"failed","terminal_reason":"fixture-failure"}}

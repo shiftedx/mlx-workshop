@@ -1,0 +1,26 @@
+{
+  "calibration": {
+    "dataset_id": "fixture-calibration-v1",
+    "dataset_hash": "sha256:fixture-calibration",
+    "split": "calibration",
+    "tokenizer_id": "fixture-tokenizer",
+    "tokenizer_hash": "sha256:fixture-tokenizer",
+    "chat_template_hash": "sha256:fixture-template",
+    "seed": 17,
+    "context_length": 128,
+    "sample_budget": 4,
+    "token_budget": 128
+  },
+  "modules": [
+    {"id": "global.embedding", "parameters": 3200, "input_features": 64},
+    {"id": "layer.0.attention.output", "parameters": 1024, "input_features": 32},
+    {"id": "layer.0.mlp.down", "parameters": 2048, "input_features": 64},
+    {"id": "layer.1.attention.output", "parameters": 1024, "input_features": 32},
+    {"id": "global.lm_head", "parameters": 3200, "input_features": 64}
+  ],
+  "measurements": {
+    "layer.0.attention.output": {"mxfp4": 0.08, "mxfp8": 0.02},
+    "layer.0.mlp.down": {"mxfp4": 0.18, "mxfp8": 0.04},
+    "layer.1.attention.output": {"mxfp4": 0.05, "mxfp8": 0.01}
+  }
+}

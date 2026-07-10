@@ -1,0 +1,40 @@
+{
+  "files": [
+    {
+      "bytes": 100,
+      "path": "chat_template.jinja",
+      "sha256": "54d18203e2ef1581b6d93916838354d83a15dabb0aca0ee35138e363bbfcc534"
+    },
+    {
+      "bytes": 567,
+      "path": "config.json",
+      "sha256": "0216d110e87b1292c3c34832ae0e00dbb32b91fbc3663c5247e30512b6082ec1"
+    },
+    {
+      "bytes": 41228,
+      "path": "model.safetensors",
+      "sha256": "3e8596ef490f0a42d4231e7bf41625b309860cc22d43f7af4f76dbcd2d12ed2c"
+    },
+    {
+      "bytes": 1368,
+      "path": "model.safetensors.index.json",
+      "sha256": "38eb37a8a04f2b3a48aad4981f9cba734cb62717808b2b93ee7a91207fab9b66"
+    },
+    {
+      "bytes": 1960,
+      "path": "tokenizer.json",
+      "sha256": "c2e1012dd52484c791f18107f9ebf3a19347392a697b00e62613fa281aac6750"
+    },
+    {
+      "bytes": 192,
+      "path": "tokenizer_config.json",
+      "sha256": "8800bf19a96e6a53ae8c7a8941a9739dbbfaa74185f6158015278bb5fa7532d2"
+    }
+  ],
+  "kind": "deterministic-tiny-llama-float-source",
+  "license": "generated-test-fixture",
+  "model_type": "llama",
+  "purpose": "MLX Workshop real conversion and qualification tracer bullet",
+  "schema_version": 1,
+  "seed": 7
+}

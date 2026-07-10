@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+MLXWorkshop/.build/
+MLXWorkshop/build/
+MLXWorkshop/DerivedData/
+*.dmg
+*.dmg.sha256
+*.xcresult
+.venv/
+__pycache__/
+*.py[cod]
+.swiftpm/

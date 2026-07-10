@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "exact_parent": "/absolute/inspected/model",
+  "operations": ["quantize", "quantize"],
+  "quant_modes": ["mxfp4"],
+  "allocation": {
+    "strategy": "uniform",
+    "target_bpw": 4.0,
+    "kl_tolerance": null,
+    "per_module_overrides": false
+  },
+  "priorities": {"quality": 0.78, "size": 0.58},
+  "time_budget_seconds": 3600,
+  "context_target_tokens": 32768,
+  "calibration": {
+    "identity": "not-applicable",
+    "dataset_sha256": null,
+    "sample_budget": 0,
+    "token_budget": 0,
+    "seed": null
+  },
+  "protection_rules": {
+    "preserve_embeddings": false,
+    "preserve_output_head": false,
+    "protect_sensitive_modules": false
+  },
+  "validation": {
+    "required_gates": ["provenance-structure"],
+    "critical_regressions_allowed": 0
+  }
+}

@@ -1,0 +1,3 @@
+{"schema_version":1,"run_id":"fixture-unknown-event","sequence":1,"timestamp":"2026-07-09T22:06:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-unknown-event","sequence":2,"timestamp":"2026-07-09T22:06:00.100Z","type":"stage.telemetry-from-a-future-v1-writer","stage":"fixture","payload":{"new_field":"preserve but ignore"}}
+{"schema_version":1,"run_id":"fixture-unknown-event","sequence":3,"timestamp":"2026-07-09T22:06:00.200Z","type":"run.interrupted","stage":null,"payload":{"state":"interrupted","resumability":"unknown"}}

@@ -1,0 +1,90 @@
+name: MLXWorkshop
+options:
+  bundleIdPrefix: com.cozylabs
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    ARCHS: arm64
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.1.0-beta.1"
+targets:
+  MLXWorkshop:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/MLXWorkshopApp
+      - path: Resources/Assets.xcassets
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: ../runtime/runtime.lock.json
+        buildPhase: resources
+      - path: ../public/LICENSE
+        buildPhase: resources
+      - path: ../public/PRIVACY.md
+        buildPhase: resources
+      - path: ../public/THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: MLX Workshop
+        PRODUCT_MODULE_NAME: MLXWorkshopApp
+        PRODUCT_BUNDLE_IDENTIFIER: com.cozylabs.MLXWorkshop
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Resources/MLXWorkshop.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        ENABLE_TESTABILITY: NO
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: Resources/MLXWorkshopDebug.entitlements
+          ENABLE_APP_SANDBOX: NO
+    postBuildScripts:
+      - name: Bundle locked MLX runtime
+        basedOnDependencyAnalysis: false
+        script: |
+          if [[ "${MLX_BUNDLE_RUNTIME:-0}" == "1" ]]; then
+            "$SRCROOT/../scripts/release/build_runtime.sh" \
+              "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Runtime" \
+              "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/runtime.lock.json"
+          else
+            rm -rf "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Runtime"
+          fi
+  MLXWorkshopUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: MLXWorkshop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cozylabs.MLXWorkshop.UITests
+        TEST_TARGET_NAME: MLXWorkshop
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  MLX Workshop:
+    build:
+      targets:
+        MLXWorkshop: all
+        MLXWorkshopUITests: [test]
+    test:
+      targets:
+        - name: MLXWorkshopUITests
+      gatherCoverageData: false
+    run:
+      config: Debug
+    archive:
+      config: Release

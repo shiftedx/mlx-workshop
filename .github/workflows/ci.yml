@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-15-arm64
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          enable-cache: true
+      - name: Install locked runtime
+        run: |
+          uv venv --python 3.11
+          uv pip install --python .venv/bin/python --require-hashes -r runtime/requirements.lock.txt
+      - name: Python tests
+        run: .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Swift tests
+        working-directory: MLXWorkshop
+        run: swift test
+      - name: Format and shell checks
+        run: |
+          xcrun swift-format lint --recursive MLXWorkshop/Sources MLXWorkshop/Tests MLXWorkshop/UITests
+          find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Build and verify release app
+        run: |
+          brew install xcodegen
+          scripts/release/build_macos_app.sh
+          scripts/release/verify_public_release.sh

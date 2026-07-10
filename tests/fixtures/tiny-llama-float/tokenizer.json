@@ -1,0 +1,112 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "<unk>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "<s>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "</s>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "<pad>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": null,
+  "pre_tokenizer": {
+    "type": "Whitespace"
+  },
+  "post_processor": {
+    "type": "TemplateProcessing",
+    "single": [
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      }
+    ],
+    "pair": [
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "B",
+          "type_id": 1
+        }
+      }
+    ],
+    "special_tokens": {}
+  },
+  "decoder": null,
+  "model": {
+    "type": "WordLevel",
+    "vocab": {
+      "<unk>": 0,
+      "<s>": 1,
+      "</s>": 2,
+      "<pad>": 3,
+      "user": 4,
+      "assistant": 5,
+      "system": 6,
+      ":": 7,
+      "hello": 8,
+      "world": 9,
+      "test": 10,
+      "tiny": 11,
+      "model": 12,
+      "local": 13,
+      "mlx": 14,
+      "workshop": 15,
+      "yes": 16,
+      "no": 17,
+      "one": 18,
+      "two": 19,
+      "three": 20,
+      "four": 21,
+      "five": 22,
+      "json": 23,
+      "tool": 24,
+      "code": 25,
+      "safe": 26,
+      "parent": 27,
+      "candidate": 28,
+      "quantize": 29,
+      ".": 30,
+      "\n": 31
+    },
+    "unk_token": "<unk>"
+  }
+}

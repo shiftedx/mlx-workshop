@@ -1,0 +1,3 @@
+{"schema_version":1,"run_id":"fixture-corrupt-tail","sequence":1,"timestamp":"2026-07-09T22:05:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-corrupt-tail","sequence":2,"timestamp":"2026-07-09T22:05:00.100Z","type":"run.state","stage":null,"payload":{"state":"interrupted","resumability":"safe"}}
+{"schema_version":1,"run_id":"fixture-corrupt-tail","sequence":3,"timestamp":"2026-07-09T22:05:00.200Z","type":"stage.log"

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "run_id": "recipe-disk-blocked",
+  "created_at": "2026-07-09T22:01:00.000Z",
+  "workspace": "/workspace",
+  "run_directory": "/workspace/recipe-disk-blocked",
+  "exact_parent": "/absolute/inspected/model",
+  "capabilities": {},
+  "recipe": {
+    "schema_version": 1,
+    "exact_parent": "/absolute/inspected/model",
+    "operations": ["quantize"],
+    "quant_modes": ["mxfp4"],
+    "allocation": {
+      "strategy": "uniform",
+      "target_bpw": 4.0,
+      "kl_tolerance": null,
+      "per_module_overrides": false
+    },
+    "priorities": {"quality": 0.78, "size": 0.58},
+    "time_budget_seconds": 3600,
+    "context_target_tokens": 32768,
+    "calibration": {
+      "identity": "not-applicable",
+      "dataset_sha256": null,
+      "sample_budget": 0,
+      "token_budget": 0,
+      "seed": null
+    },
+    "protection_rules": {
+      "preserve_embeddings": false,
+      "preserve_output_head": false,
+      "protect_sensitive_modules": false
+    },
+    "validation": {
+      "required_gates": [
+        "provenance-structure",
+        "deterministic-language-schema",
+        "parent-parity"
+      ],
+      "critical_regressions_allowed": 0
+    }
+  },
+  "resource_estimate": {
+    "kind": "estimate",
+    "basis": {
+      "source": "inspected-safetensors-shard-bytes",
+      "output": "quant-mode-factor-plus-64-mib-per-mode",
+      "temporary": "source-bytes-plus-1-gib",
+      "memory": "source-bytes-plus-2-gib",
+      "host": "planning-time-read-only-snapshot"
+    },
+    "uncertainty": "conservative-upper-bound",
+    "source_bytes": 1024,
+    "estimated_output_bytes": 67109325,
+    "estimated_temporary_bytes": 1073742848,
+    "disk_reserve_bytes": 32212254720,
+    "required_free_disk_bytes": 33353106893,
+    "observed_free_disk_bytes": 1073741824,
+    "estimated_peak_memory_bytes": 2147484672,
+    "memory_reserve_bytes": 8589934592,
+    "observed_unified_memory_bytes": 68719476736,
+    "usable_unified_memory_bytes": 60129542144,
+    "estimated_duration_seconds": null,
+    "time_budget_seconds": 3600,
+    "feasibility": "blocked",
+    "reason_codes": ["duration-estimate-unknown", "resource-disk-insufficient"]
+  },
+  "blockers": [
+    {
+      "code": "resource-disk-insufficient",
+      "message": "The conservative free-disk requirement exceeds observed free disk."
+    }
+  ],
+  "steps": []
+}

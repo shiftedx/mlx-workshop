@@ -1,0 +1,5 @@
+{"schema_version":1,"run_id":"fixture-progress","sequence":1,"timestamp":"2026-07-09T22:02:00.000Z","type":"run.created","stage":null,"payload":{"state":"created","resumability":"not-applicable"}}
+{"schema_version":1,"run_id":"fixture-progress","sequence":2,"timestamp":"2026-07-09T22:02:00.100Z","type":"run.state","stage":null,"payload":{"state":"running","resumability":"unsafe"}}
+{"schema_version":1,"run_id":"fixture-progress","sequence":3,"timestamp":"2026-07-09T22:02:00.200Z","type":"stage.started","stage":"quantize","payload":{"display_name":"Quantize fixture"}}
+{"schema_version":1,"run_id":"fixture-progress","sequence":4,"timestamp":"2026-07-09T22:02:00.300Z","type":"stage.progress","stage":"quantize","payload":{"completed":17,"total":100,"unit":"tensors"}}
+{"schema_version":1,"run_id":"fixture-progress","sequence":5,"timestamp":"2026-07-09T22:02:00.400Z","type":"resource.pressure","stage":"quantize","payload":{"resource":"disk","severity":"warning","available_bytes":42949672960}}
