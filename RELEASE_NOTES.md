@@ -1,5 +1,9 @@
 # MLX Workshop 0.1.0-beta.1
 
+> **Source prerelease.** The DMG is intentionally withheld until its Developer ID
+> signature, notarization, stapling, and Gatekeeper checks pass. Do not redistribute
+> an ad-hoc local build.
+
 This first beta focuses on one trustworthy path: inspect a compatible local float
 model, review an exact uniform quantization plan, create a new candidate, and qualify
 it without changing the parent.
