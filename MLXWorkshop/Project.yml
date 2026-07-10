@@ -24,11 +24,11 @@ targets:
         buildPhase: resources
       - path: ../runtime/runtime.lock.json
         buildPhase: resources
-      - path: ../public/LICENSE
+      - path: ../LICENSE
         buildPhase: resources
-      - path: ../public/PRIVACY.md
+      - path: ../PRIVACY.md
         buildPhase: resources
-      - path: ../public/THIRD_PARTY_NOTICES.md
+      - path: ../THIRD_PARTY_NOTICES.md
         buildPhase: resources
     settings:
       base:
