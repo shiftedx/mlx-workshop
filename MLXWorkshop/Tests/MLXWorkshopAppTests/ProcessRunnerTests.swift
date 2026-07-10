@@ -58,6 +58,7 @@ final class ProcessRunnerTests: XCTestCase {
 
   func testCancellationTerminatesOnlyTheTrackedChild() async throws {
     let runner = ProcessRunner()
+    let probe = ProcessOutputProbe()
     let request = ProcessRequest(
       id: UUID(),
       executableURL: URL(fileURLWithPath: "/usr/bin/python3"),
@@ -66,8 +67,18 @@ final class ProcessRunnerTests: XCTestCase {
       environment: ["PYTHONUNBUFFERED": "1"]
     )
 
-    let task = Task { try await runner.run(request) }
-    try await Task.sleep(for: .milliseconds(150))
+    let task = Task {
+      try await runner.run(request) { chunk in
+        await probe.record(chunk)
+      }
+    }
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .seconds(5))
+    while !(await probe.sawReady) && clock.now < deadline {
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    let childBecameReady = await probe.sawReady
+    XCTAssertTrue(childBecameReady)
     let cancelled = await runner.cancel(id: request.id, grace: .milliseconds(100))
     XCTAssertTrue(cancelled)
     let result = try await task.value
@@ -75,5 +86,15 @@ final class ProcessRunnerTests: XCTestCase {
     XCTAssertTrue(result.cancellationRequested)
     XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stdout.text.contains("ready"))
+  }
+}
+
+private actor ProcessOutputProbe {
+  private(set) var sawReady = false
+
+  func record(_ chunk: ProcessOutputChunk) {
+    if chunk.stream == .stdout, String(decoding: chunk.data, as: UTF8.self).contains("ready") {
+      sawReady = true
+    }
   }
 }
