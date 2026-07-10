@@ -7,12 +7,12 @@ struct SensitivityAtlasView: View {
     VStack(spacing: 0) {
       HStack(spacing: 12) {
         VStack(alignment: .leading, spacing: 2) {
-          Text(store.layers.isEmpty ? "Uniform quantization" : "Sensitivity Atlas")
+          Text(store.layers.isEmpty ? "Create an optimized copy" : "Sensitivity Atlas")
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(WorkshopTheme.ink)
           Text(
             store.layers.isEmpty
-              ? "The supported beta route creates one immutable MXFP4, MXFP8, or affine candidate"
+              ? "Choose a supported format; the original model always stays unchanged"
               : "Measured KL response for each candidate precision"
           )
           .font(.system(size: 11))
@@ -34,7 +34,7 @@ struct SensitivityAtlasView: View {
           store.expertMode.toggle()
           store.showInspector = true
         } label: {
-          Label("Edit recipe", systemImage: "slider.horizontal.3")
+          Label("Adjust settings", systemImage: "slider.horizontal.3")
         }
         .buttonStyle(QuietButtonStyle())
         .accessibilityIdentifier("workbench.editRecipe")
@@ -44,13 +44,13 @@ struct SensitivityAtlasView: View {
 
       if store.layers.isEmpty {
         ContentUnavailableView {
-          Label("Ready to plan a uniform candidate", systemImage: "shippingbox.and.arrow.forward")
+          Label("Ready to create a smaller copy", systemImage: "shippingbox.and.arrow.forward")
         } description: {
           Text(
-            "Choose the quantization format in the recipe inspector. MLX Workshop will disclose the exact parent, output, resource estimates, command, and qualification gates before anything starts."
+            "Choose a format in Settings, then review the plan. You will see disk and memory estimates before confirming anything."
           )
         } actions: {
-          Button("Edit uniform recipe") {
+          Button("Adjust settings") {
             store.showInspector = true
           }
           .accessibilityIdentifier("workbench.empty.editRecipe")
@@ -82,7 +82,7 @@ struct SensitivityAtlasView: View {
         Spacer()
         Text(
           store.layers.isEmpty
-            ? "Qualification remains separate from completion"
+            ? "A finished copy still needs verification"
             : "Target \(store.recipe.targetBPW, specifier: "%.2f") BPW"
         )
         .monospacedDigit()

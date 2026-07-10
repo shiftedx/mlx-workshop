@@ -8,7 +8,7 @@ struct RecipeInspectorView: View {
     VStack(spacing: 0) {
       HStack {
         VStack(alignment: .leading, spacing: WorkshopTheme.spaceXXS) {
-          Text("Optimization recipe")
+          Text("Optimization settings")
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(WorkshopTheme.ink)
           Text(store.recipeName)
@@ -84,7 +84,7 @@ struct RecipeInspectorView: View {
           }
         } label: {
           Label(
-            store.isRunning ? "Cancel current run" : "Plan this recipe",
+            store.isRunning ? "Cancel current run" : "Review this plan",
             systemImage: store.isRunning ? "stop.fill" : "play.fill")
         }
         .buttonStyle(PrimaryActionButtonStyle())

@@ -3,11 +3,11 @@
 Date: 2026-07-10  
 Scope: native keyboard, VoiceOver, window, and signed-install verification
 
-Automated domain, process, packaging, and real tiny-model tests pass. XCUITest is
-currently blocked before application launch because this macOS account times out
-enabling automation mode; System Events is also denied Accessibility access. The
-items below remain a deliberate beta gate rather than being inferred from source
-labels or unit tests.
+Automated domain, process, packaging, real tiny-model, and native XCUITest journeys
+pass. The UI automation covers fresh setup and the complete supported conversion
+route through verification, run history, and host refresh. The items below remain
+manual checks because they depend on assistive-technology behavior, window/system
+settings, or a notarized installer.
 
 ## Confirmation and workflow
 
@@ -15,8 +15,8 @@ labels or unit tests.
   uncertainty, feasibility, gates, commands, and weight-changing warning.
 - [ ] Tab and Shift-Tab reach Decline and Confirm without a trap.
 - [ ] Escape declines without creating a run; Return confirms exactly once.
-- [ ] Import a tiny model and workspace through the sandbox file pickers, inspect,
-  plan, confirm, observe completion, qualify, and reveal its evidence.
+- [x] Import a tiny model and workspace, inspect, plan, confirm, observe completion,
+  verify, and review its qualified run state through native UI automation.
 - [ ] Cancel a running fixture and verify the terminal state and logs.
 - [ ] Relaunch with an interrupted fixture, resume it, and verify recovered cancel.
 
@@ -37,4 +37,4 @@ labels or unit tests.
   Applications, launch it through Gatekeeper, run the tiny campaign, relaunch, and
   uninstall without leaving data outside the chosen workspace.
 
-Manual execution status: **pending Accessibility permission and a notarized build**.
+Manual execution status: **VoiceOver/keyboard/system-settings pass and notarized clean-machine install pending**.

@@ -12,9 +12,10 @@ final class MLXWorkshopLaunchUITests: XCTestCase {
     app.launch()
 
     XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
-    XCTAssertTrue(app.staticTexts["Start with a local model"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["Choose model…"].exists)
-    XCTAssertTrue(app.buttons["Choose run workspace…"].exists)
+    XCTAssertTrue(
+      app.staticTexts["Set up your first optimization"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["Choose model folder…"].exists)
+    XCTAssertTrue(app.buttons["Choose results folder…"].exists)
   }
 
   func testRealTinyModelPlanRunQualificationAndSupportedNavigation() throws {
@@ -30,7 +31,7 @@ final class MLXWorkshopLaunchUITests: XCTestCase {
     ]
     app.launch()
 
-    XCTAssertTrue(app.staticTexts["Uniform quantization"].waitForExistence(timeout: 45))
+    XCTAssertTrue(app.staticTexts["Create an optimized copy"].waitForExistence(timeout: 45))
     XCTAssertFalse(app.staticTexts["Demo data"].exists)
     XCTAssertFalse(app.staticTexts["Compare"].exists)
 
@@ -44,16 +45,24 @@ final class MLXWorkshopLaunchUITests: XCTestCase {
     XCTAssertTrue(app.buttons["confirmation.confirm"].exists)
     app.buttons["confirmation.confirm"].click()
 
+    let verifyResult = app.buttons["guide.nextAction"]
     XCTAssertTrue(
-      app.buttons["run.lifecycle.qualify"].waitForExistence(timeout: 45),
-      "A successful conversion must remain explicitly unqualified until gates run")
-    app.buttons["run.lifecycle.qualify"].click()
-    XCTAssertTrue(
-      app.staticTexts["Qualified — all required gates passed"].waitForExistence(timeout: 45))
+      verifyResult.waitForExistence(timeout: 45),
+      "A successful conversion must offer verification before it is marked ready")
+    let verificationReady = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "label == %@", "Verify result"),
+      object: verifyResult)
+    XCTAssertEqual(XCTWaiter.wait(for: [verificationReady], timeout: 45), .completed)
+    verifyResult.click()
+    let verificationComplete = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "label == %@", "Show result in Finder"),
+      object: verifyResult)
+    XCTAssertEqual(XCTWaiter.wait(for: [verificationComplete], timeout: 45), .completed)
 
     app.staticTexts["Runs"].firstMatch.click()
     XCTAssertTrue(app.staticTexts["Run history"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.staticTexts["Qualified"].firstMatch.exists)
+    XCTAssertTrue(
+      app.staticTexts["Run state: qualified; all required gates passed"].firstMatch.exists)
 
     app.staticTexts["Host"].firstMatch.click()
     XCTAssertTrue(app.staticTexts["This Mac"].waitForExistence(timeout: 10))

@@ -111,15 +111,15 @@ struct RunDrawerView: View {
   private func evidenceActions(_ run: WorkshopRun) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       Label(
-        run.isQualified ? "Qualified — all required gates passed" : "Qualification not established",
+        run.isQualified ? "Verified — all required checks passed" : "Result not verified yet",
         systemImage: run.isQualified ? "checkmark.seal.fill" : "circle.dashed"
       )
       .font(.system(size: 11, weight: .semibold))
       .foregroundStyle(run.isQualified ? WorkshopTheme.success : WorkshopTheme.secondaryInk)
       .accessibilityLabel(
         run.isQualified
-          ? "Qualification state: qualified; all required gates passed"
-          : "Qualification state: not established")
+          ? "Verification state: verified; all required checks passed"
+          : "Verification state: not established")
 
       HStack(spacing: 8) {
         Button("Reveal run") { reveal(run.runDirectory) }
@@ -222,7 +222,7 @@ struct RunDrawerView: View {
     case .cancelled: "The run stopped without qualification."
     case .interrupted: "The process ended unexpectedly; check resumability and raw logs."
     case .failed: "The run failed; inspect the diagnostic and raw logs."
-    case .completed: "Execution completed. Qualification remains a separate evidence state."
+    case .completed: "The optimized copy was created. Verify it before treating it as ready."
     case .protocolMismatch:
       "This app cannot safely interpret the run protocol; mutating actions are disabled."
     }
@@ -296,7 +296,7 @@ extension RunLifecycleAction {
 
   var label: String {
     switch self {
-    case .qualify: "Run qualification"
+    case .qualify: "Verify result"
     case .resume: "Resume safe run"
     case .cancelRecovered: "Cancel recovered run"
     }
@@ -312,7 +312,7 @@ extension RunLifecycleAction {
 
   var help: String {
     switch self {
-    case .qualify: "Run the recipe's required gates and record their evidence"
+    case .qualify: "Check loading, deterministic behavior, and parent consistency"
     case .resume: "Continue this journal-safe interrupted run without changing its identity"
     case .cancelRecovered: "Write this run's cooperative cancellation marker and await its journal"
     }

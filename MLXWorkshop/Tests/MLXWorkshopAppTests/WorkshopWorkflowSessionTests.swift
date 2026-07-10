@@ -159,6 +159,11 @@ final class WorkshopWorkflowSessionTests: XCTestCase {
       await harness.session.confirmPendingRun(harness.store)
     }
     try await waitUntil { harness.store.currentRun?.state == .running }
+    let interruptionMarker = harness.workspace.appendingPathComponent(
+      "session-interrupted/artifacts/.interrupt-once-started")
+    try await waitUntil {
+      FileManager.default.fileExists(atPath: interruptionMarker.path)
+    }
     let interrupted = await harness.session.interruptRunningRun(harness.store)
     XCTAssertTrue(interrupted)
     await execution.value
@@ -185,6 +190,11 @@ final class WorkshopWorkflowSessionTests: XCTestCase {
       await harness.session.confirmPendingRun(harness.store)
     }
     try await waitUntil { harness.store.currentRun?.state == .running }
+    let interruptionMarker = harness.workspace.appendingPathComponent(
+      "session-resume/artifacts/.interrupt-once-started")
+    try await waitUntil {
+      FileManager.default.fileExists(atPath: interruptionMarker.path)
+    }
     let interrupted = await harness.session.interruptRunningRun(harness.store)
     XCTAssertTrue(interrupted)
     await execution.value

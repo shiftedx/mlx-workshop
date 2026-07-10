@@ -54,7 +54,7 @@ struct MLXWorkshopApp: App {
         Button(
           store.isRunning
             ? "Cancel current run"
-            : store.currentRun?.state == .planned ? "Review current plan" : "Plan current recipe"
+            : store.currentRun?.state == .planned ? "Review and confirm" : "Review plan"
         ) {
           if store.isRunning {
             Task { await store.requestCancellation() }
@@ -74,9 +74,9 @@ struct MLXWorkshopApp: App {
 
         Divider()
 
-        Toggle("Show recipe inspector", isOn: $store.showInspector)
+        Toggle("Show settings", isOn: $store.showInspector)
           .keyboardShortcut("i", modifiers: [.command, .option])
-        Toggle("Show run drawer", isOn: $store.showRunDrawer)
+        Toggle("Show run evidence", isOn: $store.showRunDrawer)
           .keyboardShortcut("j", modifiers: [.command])
       }
     }

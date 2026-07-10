@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct WorkshopRootView: View {
@@ -25,7 +26,13 @@ struct WorkshopRootView: View {
       }
     }
     .task {
-      guard !CommandLine.arguments.contains(where: { $0.hasPrefix("--snapshot-live=") }) else {
+      let hasLiveSnapshot = CommandLine.arguments.contains(where: {
+        $0.hasPrefix("--snapshot-live=")
+      })
+      let hasUITestBootstrap =
+        CommandLine.arguments.contains(where: { $0.hasPrefix("--ui-test-model=") })
+        && CommandLine.arguments.contains(where: { $0.hasPrefix("--ui-test-workspace=") })
+      guard !hasLiveSnapshot || hasUITestBootstrap else {
         return
       }
       #if DEBUG
@@ -123,7 +130,7 @@ struct WorkshopRootView: View {
         Button {
           store.showInspector.toggle()
         } label: {
-          Label("Recipe inspector", systemImage: "sidebar.trailing")
+          Label("Settings", systemImage: "sidebar.trailing")
         }
 
         Button {
@@ -134,8 +141,7 @@ struct WorkshopRootView: View {
           }
         } label: {
           Label(
-            store.isRunning
-              ? "Cancel" : store.currentRun?.state == .planned ? "Review plan" : "Plan run",
+            store.isRunning ? "Cancel" : "Review plan",
             systemImage: store.isRunning ? "stop.fill" : "play.fill")
         }
         .disabled(!store.canStartRun && !store.canCancelRun)
@@ -148,49 +154,57 @@ struct WorkshopRootView: View {
   }
 
   private var setupView: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: WorkshopTheme.spaceM) {
       Image(systemName: "shippingbox.and.arrow.backward")
         .font(.system(size: 38, weight: .medium))
         .foregroundStyle(WorkshopTheme.skyBright)
         .accessibilityHidden(true)
-      Text("Start with a local model")
-        .font(.system(size: 18, weight: .semibold))
+      Text("Set up your first optimization")
+        .font(.system(size: 20, weight: .semibold))
         .foregroundStyle(WorkshopTheme.ink)
       Text(
-        "Choose a model directory and a separate run workspace. MLX Workshop inspects capabilities before it offers an operation; unknown tensor semantics stop with an adapter requirement."
+        "Choose two folders. Then MLX Workshop will walk you through the plan, create a separate optimized copy, and verify the result. Your original model is never changed."
       )
-      .font(.system(size: 11.5))
+      .font(.system(size: 12))
       .foregroundStyle(WorkshopTheme.secondaryInk)
       .multilineTextAlignment(.center)
-      .frame(maxWidth: 520)
+      .frame(maxWidth: 600)
 
-      HStack(spacing: 12) {
-        Button(action: chooseModel) {
-          Label(
-            store.model == nil ? "Choose model folder…" : "Choose another model folder…",
-            systemImage: "folder")
-        }
-        .buttonStyle(PrimaryActionButtonStyle())
-        .accessibilityIdentifier("setup.chooseModel")
-        .frame(width: 210)
-        .keyboardShortcut("o", modifiers: [.command])
-        Button(action: chooseWorkspace) {
-          Label(
-            store.runWorkspace == nil ? "Choose run workspace…" : "Change workspace…",
-            systemImage: "externaldrive")
-        }
-        .buttonStyle(QuietButtonStyle())
-        .accessibilityIdentifier("setup.chooseWorkspace")
-        .keyboardShortcut("o", modifiers: [.command, .option])
-      }
+      VStack(spacing: WorkshopTheme.spaceS) {
+        setupStep(
+          number: 1,
+          title: "Choose the original model",
+          detail:
+            "Select the folder that contains config.json and the model weight files, usually ending in .safetensors.",
+          selection: store.model?.directory.path(percentEncoded: false),
+          buttonTitle: store.model == nil ? "Choose model folder…" : "Change model folder…",
+          symbol: "folder",
+          isPrimary: store.model == nil,
+          identifier: "setup.chooseModel",
+          action: chooseModel)
 
-      VStack(alignment: .leading, spacing: 7) {
-        setupFact(
-          "Model folder", store.model?.directory.path(percentEncoded: false) ?? "Not selected")
-        setupFact(
-          "Run workspace", store.runWorkspace?.path(percentEncoded: false) ?? "Not selected")
+        setupStep(
+          number: 2,
+          title: "Choose where results should go",
+          detail:
+            "Select or create a separate writable folder. Each attempt gets its own run folder, logs, and evidence.",
+          selection: store.runWorkspace?.path(percentEncoded: false),
+          buttonTitle: store.runWorkspace == nil
+            ? "Choose results folder…" : "Change results folder…",
+          symbol: "externaldrive",
+          isPrimary: store.model != nil && store.runWorkspace == nil,
+          identifier: "setup.chooseWorkspace",
+          action: chooseWorkspace)
       }
-      .frame(maxWidth: 520, alignment: .leading)
+      .frame(maxWidth: 680)
+
+      Label(
+        "Next: review the format, required disk space, memory estimate, and exact output before anything runs.",
+        systemImage: "arrow.right.circle"
+      )
+      .font(.system(size: 11))
+      .foregroundStyle(WorkshopTheme.secondaryInk)
+      .frame(maxWidth: 600, alignment: .leading)
     }
     .padding(32)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -198,11 +212,64 @@ struct WorkshopRootView: View {
     .accessibilityElement(children: .contain)
   }
 
-  private func setupFact(_ label: String, _ value: String) -> some View {
-    LabeledContent(label, value: value)
-      .font(.system(size: 10.5, design: .monospaced))
-      .foregroundStyle(WorkshopTheme.secondaryInk)
-      .lineLimit(1)
+  private func setupStep(
+    number: Int,
+    title: String,
+    detail: String,
+    selection: String?,
+    buttonTitle: String,
+    symbol: String,
+    isPrimary: Bool,
+    identifier: String,
+    action: @escaping () -> Void
+  ) -> some View {
+    HStack(spacing: WorkshopTheme.spaceM) {
+      Image(systemName: selection == nil ? "\(number).circle" : "checkmark.circle.fill")
+        .font(.system(size: 22, weight: .semibold))
+        .foregroundStyle(selection == nil ? WorkshopTheme.skyBright : WorkshopTheme.success)
+        .frame(width: 28)
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: WorkshopTheme.spaceXXS) {
+        Text(title)
+          .font(.system(size: 13.5, weight: .semibold))
+          .foregroundStyle(WorkshopTheme.ink)
+        Text(detail)
+          .font(.system(size: 11))
+          .foregroundStyle(WorkshopTheme.secondaryInk)
+          .fixedSize(horizontal: false, vertical: true)
+        Text(selection ?? "No folder chosen yet")
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(selection == nil ? WorkshopTheme.quietInk : WorkshopTheme.secondaryInk)
+          .lineLimit(1)
+          .truncationMode(.middle)
+      }
+
+      Spacer(minLength: WorkshopTheme.spaceS)
+
+      if isPrimary {
+        Button(action: action) {
+          Label(buttonTitle, systemImage: symbol).frame(minWidth: 168)
+        }
+        .buttonStyle(PrimaryActionButtonStyle())
+        .accessibilityIdentifier(identifier)
+      } else {
+        Button(action: action) {
+          Label(buttonTitle, systemImage: symbol).frame(minWidth: 168)
+        }
+        .buttonStyle(QuietButtonStyle())
+        .accessibilityIdentifier(identifier)
+      }
+    }
+    .padding(WorkshopTheme.spaceM)
+    .background(
+      WorkshopTheme.surface,
+      in: RoundedRectangle(cornerRadius: WorkshopTheme.radiusMedium, style: .continuous)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: WorkshopTheme.radiusMedium, style: .continuous)
+        .stroke(WorkshopTheme.divider, lineWidth: 1)
+    )
   }
 
   private func loadingView(_ activity: SetupActivity) -> some View {
@@ -212,7 +279,7 @@ struct WorkshopRootView: View {
         .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(WorkshopTheme.ink)
       Text(
-        "Waiting for verified local workflow evidence. No capability or measurement is inferred by the app."
+        loadingDetail(activity)
       )
       .font(.system(size: 11.5))
       .foregroundStyle(WorkshopTheme.secondaryInk)
@@ -223,6 +290,19 @@ struct WorkshopRootView: View {
     .background(WorkshopTheme.canvas)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(activity.rawValue). Waiting for local workflow evidence.")
+  }
+
+  private func loadingDetail(_ activity: SetupActivity) -> String {
+    switch activity {
+    case .selectingModel:
+      "Choose the folder that contains config.json and the model weight files."
+    case .selectingWorkspace:
+      "Choose or create a separate folder where optimized copies and run evidence can be saved."
+    case .inspectingModel:
+      "Reading model metadata and checking support. Your original files are not changed."
+    case .preparingRecipe:
+      "Checking this Mac and preparing safe starting settings for review."
+    }
   }
 
   private func blockedView(_ diagnostic: WorkshopDiagnostic) -> some View {
@@ -290,7 +370,18 @@ struct WorkshopRootView: View {
     switch action {
     case .chooseModel, .retryInspection: chooseModel()
     case .chooseWorkspace: chooseWorkspace()
-    case .revealRun, .openLog: break
+    case .revealRun:
+      if let directory = store.currentRun?.runDirectory {
+        NSWorkspace.shared.activateFileViewerSelecting([directory])
+      } else {
+        store.showRunDrawer = true
+      }
+    case .openLog:
+      if let log = store.currentRun?.stderrLog ?? store.currentRun?.stdoutLog {
+        NSWorkspace.shared.open(log)
+      } else {
+        store.showRunDrawer = true
+      }
     }
   }
 

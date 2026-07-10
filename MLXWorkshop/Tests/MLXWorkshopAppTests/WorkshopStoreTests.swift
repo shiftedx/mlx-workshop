@@ -83,6 +83,7 @@ final class WorkshopStoreTests: XCTestCase {
     XCTAssertEqual(store.currentRun?.plan, disclosure)
     XCTAssertNil(store.currentRun?.command)
     XCTAssertEqual(store.currentRun?.isQualified, false)
+    XCTAssertFalse(store.showInspector)
   }
 
   func testEditingARecipeInvalidatesItsAttachedPlan() {

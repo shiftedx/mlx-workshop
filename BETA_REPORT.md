@@ -20,25 +20,25 @@ can be assembled into a read-only DMG with an Applications shortcut. The public
 source tree is separately allowlisted and scanned so local models, run outputs,
 credentials, and workstation paths are excluded.
 
-Two external macOS release gates remain. This machine has no Developer ID
+One external macOS release gate remains. This machine has no Developer ID
 Application certificate or configured notarization profile, so the DMG cannot yet
-pass Gatekeeper on friends' Macs. Automated XCUITest launch is also blocked by the
-host's Accessibility/TCC setting before the app launches; the full VoiceOver and
-keyboard checklist therefore remains manual. Neither gate is reported as passed.
+pass Gatekeeper on friends' Macs. Native XCUITest automation now launches and covers
+the setup screen plus the complete supported conversion and verification journey.
+The full VoiceOver and keyboard checklist remains manual.
 
 ## Supported beta outcomes
 
 | Outcome | Status | Evidence |
 | --- | --- | --- |
 | Inspect a local model and host | Pass | Security-scoped folder import, real capability and host snapshots, fail-closed adapter routing |
-| Review an exact conversion | Pass | Easy and Expert controls serialize one canonical recipe with commands, disk/memory estimates, warnings, and gates |
+| Review an exact conversion | Pass | Guided plan review exposes settings, commands, disk/memory estimates, warnings, and gates without requiring them to understand the next action |
 | Confirm and run MXFP conversion | Pass | Dedicated confirmation; immutable run directory; real tiny Llama MXFP4 conversion through MLX-LM |
 | Observe and recover lifecycle | Pass | Streaming events/logs, request-bound cancel/interruption, journal recovery, safe resume, and recovered cancellation |
 | Qualify a completed candidate | Pass for declared gates | Three hashed evidence gates passed for the reference tiny campaign; incomplete evidence fails closed |
 | Protect the parent | Pass | Parent hashes unchanged; candidate is contained under a new run; no in-place promotion |
 | Package the native app | Pass | Sandboxed arm64 app, bundled runtime, privacy/legal resources, full manifest verification |
 | Install from a public DMG | Blocked externally | DMG structure/checksum pass; Developer ID signature, notarization, stapling, and Gatekeeper acceptance require Apple credentials |
-| Fully automate native UI | Blocked externally | XCUITest runner times out enabling automation mode; AppleScript is denied Accessibility access |
+| Automate the supported native UI path | Pass | Two XCUITests cover fresh setup and a real tiny-model plan, confirmation, bundled-runtime conversion, verification, run history, and host refresh |
 
 Demo-only Compare, Behavior, and Sensitivity surfaces are not presented as live
 features. Generic behavior editing, universal architecture support, vision/MTP
@@ -47,7 +47,8 @@ packaging, and model-quality claims remain outside this beta.
 ## Verification summary
 
 - Python: 56 unit and integration tests.
-- Swift: 91 unit and integration tests.
+- Swift: 96 unit and integration tests.
+- Native UI: 2 XCUITests, including a real bundled-runtime conversion and verification.
 - Real reference run: tiny dense Llama to MXFP4, with three qualification gates.
 - Runtime: exact CPython 3.11.14 and fully hash-locked Python dependencies; every
   bundled file is recorded in `runtime-manifest.json`.

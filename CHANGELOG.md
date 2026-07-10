@@ -2,6 +2,15 @@
 
 ## 0.1.0-beta.1 — Unreleased binary
 
+### Guided workflow update
+
+- Replaced the technical first-run shell with plain-language model and results-folder setup.
+- Added a state-driven four-step guide with one prominent next action from plan review through verification.
+- Wired result reveal, logs, cancellation, resume, verification, run history, and host refresh to real actions.
+- Hidden demo-only Compare, Behavior, and Sensitivity surfaces from live navigation.
+- Added native XCUITest coverage for fresh setup and a real bundled-runtime tiny-model conversion.
+- Fixed a plan-confirmation split-view crash and an evidence drawer layout that could move the guide off screen.
+
 - Native macOS workbench for local model/workspace selection and capability inspection.
 - Closed uniform MXFP4, MXFP8, and affine planning with conservative resource review.
 - Dedicated weight-changing confirmation with exact arguments and required gates.

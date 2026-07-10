@@ -18,38 +18,48 @@ struct WorkbenchView: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      modelHeader
-      Divider().overlay(WorkshopTheme.divider)
-      if let warnings = store.model?.warnings, !warnings.isEmpty {
-        VStack(alignment: .leading, spacing: WorkshopTheme.spaceXS) {
-          ForEach(warnings) { warning in
-            Label(warning.message, systemImage: "exclamationmark.triangle.fill")
-              .font(.system(size: 10.5))
-              .foregroundStyle(
-                warning.severity == .blocker ? WorkshopTheme.danger : WorkshopTheme.warning)
+    GeometryReader { proxy in
+      VStack(spacing: 0) {
+        modelHeader
+        Divider().overlay(WorkshopTheme.divider)
+        if let warnings = store.model?.warnings, !warnings.isEmpty {
+          VStack(alignment: .leading, spacing: WorkshopTheme.spaceXS) {
+            ForEach(warnings) { warning in
+              Label(warning.message, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 10.5))
+                .foregroundStyle(
+                  warning.severity == .blocker ? WorkshopTheme.danger : WorkshopTheme.warning)
+            }
           }
+          .padding(.horizontal, WorkshopTheme.spaceM)
+          .padding(.vertical, WorkshopTheme.spaceS)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(WorkshopTheme.warning.opacity(0.08))
+          .accessibilityIdentifier("workbench.inspectionWarnings")
+          Divider().overlay(WorkshopTheme.divider)
         }
-        .padding(.horizontal, WorkshopTheme.spaceM)
-        .padding(.vertical, WorkshopTheme.spaceS)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(WorkshopTheme.warning.opacity(0.08))
-        .accessibilityIdentifier("workbench.inspectionWarnings")
-        Divider().overlay(WorkshopTheme.divider)
-      }
-      SensitivityAtlasView()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-      if store.showRunDrawer {
-        Divider().overlay(WorkshopTheme.divider)
-        RunDrawerView(
+        WorkshopGuideView(
           onQualify: onQualify,
           onResume: onResume,
-          onCancelRecovered: onCancelRecovered
-        )
-        .frame(height: 218)
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+          onCancelRecovered: onCancelRecovered)
+        Divider().overlay(WorkshopTheme.divider)
+        SensitivityAtlasView()
+          .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+          .clipped()
+
+        if store.showRunDrawer {
+          Divider().overlay(WorkshopTheme.divider)
+          RunDrawerView(
+            onQualify: onQualify,
+            onResume: onResume,
+            onCancelRecovered: onCancelRecovered
+          )
+          .frame(height: 218)
+          .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
       }
+      .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+      .clipped()
     }
     .background(WorkshopTheme.canvas)
     .animation(reduceMotion ? nil : .easeOut(duration: 0.20), value: store.showRunDrawer)

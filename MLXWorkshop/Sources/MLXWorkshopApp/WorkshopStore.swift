@@ -214,8 +214,10 @@ final class WorkshopStore: ObservableObject {
       ? "Plan blocked — review the preserved controls and diagnostics"
       : "Plan ready — review estimates, gates, and the exact command"
     currentRun = run
-    showRunDrawer = true
-    showInspector = true
+    if run.state == .blocked {
+      showRunDrawer = true
+      showInspector = true
+    }
   }
 
   func presentConfirmation(_ confirmation: RunConfirmation) {

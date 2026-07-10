@@ -4,6 +4,55 @@ import XCTest
 
 @MainActor
 final class WorkshopViewStateTests: XCTestCase {
+  func testGuidanceLeadsFromPlanThroughVerification() {
+    let ready = WorkshopGuidance.resolve(run: nil, planRequestPending: false, canCancel: false)
+    XCTAssertEqual(ready.step, 1)
+    XCTAssertEqual(ready.action, .reviewPlan)
+    XCTAssertEqual(ready.actionTitle, "Review plan")
+
+    let planned = WorkshopGuidance.resolve(
+      run: WorkshopRun(id: "run-1", title: "Plan", state: .planned),
+      planRequestPending: false, canCancel: false)
+    XCTAssertEqual(planned.step, 2)
+    XCTAssertEqual(planned.action, .reviewAndConfirm)
+
+    let running = WorkshopGuidance.resolve(
+      run: WorkshopRun(id: "run-1", title: "Run", state: .running),
+      planRequestPending: false, canCancel: true)
+    XCTAssertEqual(running.step, 3)
+    XCTAssertEqual(running.action, .cancel)
+
+    let completed = WorkshopGuidance.resolve(
+      run: WorkshopRun(id: "run-1", title: "Run", state: .completed),
+      planRequestPending: false, canCancel: false)
+    XCTAssertEqual(completed.step, 4)
+    XCTAssertEqual(completed.action, .verifyResult)
+    XCTAssertEqual(completed.actionTitle, "Verify result")
+
+    var qualifiedRun = WorkshopRun(id: "run-1", title: "Run", state: .completed)
+    qualifiedRun.isQualified = true
+    qualifiedRun.runDirectory = URL(fileURLWithPath: "/tmp/runs/run-1")
+    let qualified = WorkshopGuidance.resolve(
+      run: qualifiedRun, planRequestPending: false, canCancel: false)
+    XCTAssertTrue(qualified.isComplete)
+    XCTAssertEqual(qualified.action, .showResult)
+  }
+
+  func testGuidanceExplainsBlockedAndRecoverableStates() {
+    let blocked = WorkshopGuidance.resolve(
+      run: WorkshopRun(id: "run-1", title: "Plan", state: .blocked),
+      planRequestPending: false, canCancel: false)
+    XCTAssertEqual(blocked.action, .openSettings)
+    XCTAssertTrue(blocked.detail.contains("Nothing has started"))
+
+    var interruptedRun = WorkshopRun(id: "run-1", title: "Run", state: .interrupted)
+    interruptedRun.resumability = "safe"
+    let interrupted = WorkshopGuidance.resolve(
+      run: interruptedRun, planRequestPending: false, canCancel: false)
+    XCTAssertEqual(interrupted.action, .resume)
+    XCTAssertEqual(interrupted.actionTitle, "Resume safely")
+  }
+
   func testProtocolCompletionDoesNotImplyQualification() throws {
     let store = WorkshopStore(content: .demo)
     let event = try WorkflowEvent(

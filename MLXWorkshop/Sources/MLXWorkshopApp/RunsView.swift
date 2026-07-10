@@ -192,7 +192,7 @@ struct RunsView: View {
 
   private func statusText(_ run: RunRecord) -> String {
     if run.isQualified { return "Qualified" }
-    if run.state == .completed { return "Completed · unqualified" }
+    if run.state == .completed { return "Completed · needs verification" }
     return run.state.rawValue
   }
 
