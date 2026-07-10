@@ -6,15 +6,18 @@ struct RunsView: View {
   @State private var selection: RunRecord.ID?
   @State private var lifecycleRunID: String?
   let onQualify: @MainActor (String) async -> Void
+  let onStage: @MainActor (String) async -> Void
   let onResume: @MainActor (String) async -> Void
   let onCancelRecovered: @MainActor (String) async -> Void
 
   init(
     onQualify: @escaping @MainActor (String) async -> Void = { _ in },
+    onStage: @escaping @MainActor (String) async -> Void = { _ in },
     onResume: @escaping @MainActor (String) async -> Void = { _ in },
     onCancelRecovered: @escaping @MainActor (String) async -> Void = { _ in }
   ) {
     self.onQualify = onQualify
+    self.onStage = onStage
     self.onResume = onResume
     self.onCancelRecovered = onCancelRecovered
   }
@@ -174,7 +177,8 @@ struct RunsView: View {
       state: run.state,
       resumability: run.resumability,
       isQualified: run.isQualified,
-      isTrackedByThisProcess: false)
+      isTrackedByThisProcess: false,
+      isStaged: run.stagedDirectory != nil)
   }
 
   private func perform(_ action: RunLifecycleAction, runID: String) {
@@ -183,6 +187,7 @@ struct RunsView: View {
     Task { @MainActor in
       switch action {
       case .qualify: await onQualify(runID)
+      case .stage: await onStage(runID)
       case .resume: await onResume(runID)
       case .cancelRecovered: await onCancelRecovered(runID)
       }
@@ -191,6 +196,7 @@ struct RunsView: View {
   }
 
   private func statusText(_ run: RunRecord) -> String {
+    if run.stagedDirectory != nil { return "Ready to share locally" }
     if run.isQualified { return "Qualified" }
     if run.state == .completed { return "Completed · needs verification" }
     return run.state.rawValue
@@ -201,6 +207,9 @@ struct RunsView: View {
   }
 
   private func statusAccessibilityLabel(_ run: RunRecord) -> String {
+    if run.stagedDirectory != nil {
+      return "Run state: qualified and staged as an immutable local release record"
+    }
     if run.isQualified { return "Run state: qualified; all required gates passed" }
     if run.state == .completed { return "Run state: completed; qualification not established" }
     let resumability = run.resumability.map { "; resumability \($0)" } ?? ""

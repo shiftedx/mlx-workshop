@@ -193,6 +193,60 @@ final class WorkflowCLIClientTests: XCTestCase {
     XCTAssertTrue(WorkflowPresentationAdapter().run(from: recovered).isQualified)
   }
 
+  func testStagesAQualifiedRealCandidateWithoutChangingItsParent() async throws {
+    let sourceWorkspace = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let runtime = WorkflowCLIRuntime(
+      sourceWorkspaceURL: sourceWorkspace,
+      pythonURL: sourceWorkspace.appendingPathComponent(".venv/bin/python"),
+      cliURL: sourceWorkspace.appendingPathComponent("scripts/mlx_workflow_cli.py"))
+    let base = FileManager.default.temporaryDirectory
+      .appendingPathComponent("mlx-workshop-stage-\(UUID().uuidString)")
+    let runWorkspace = base.appendingPathComponent("runs")
+    let stagingRoot = base.appendingPathComponent("staged")
+    let model = sourceWorkspace.appendingPathComponent("tests/fixtures/tiny-llama-float")
+    defer { try? FileManager.default.removeItem(at: base) }
+    try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
+    let client = try WorkflowCLIClient(runtime: runtime, runWorkspaceURL: runWorkspace)
+    let recipe = try OptimizationRecipe.unplanned.workflowRecipe(exactParent: model)
+    let plan = try await client.planModel(
+      runID: "native-stage", modelURL: model, recipe: recipe)
+    _ = try await client.startRun(
+      planURL: plan.planURL, expectedPlanSHA256: plan.planSHA256
+    ).value()
+    _ = try await client.qualifyRun(runID: "native-stage")
+
+    let evidence = try await client.evidence(runID: "native-stage")
+    let evidenceEvent = try XCTUnwrap(
+      evidence.events.last(where: {
+        $0.kind == .known(.evaluationRecorded) && $0.stage == "compare"
+      }))
+    let candidates = try XCTUnwrap(WorkflowEvidenceProjector().project(evidenceEvent))
+    XCTAssertEqual(candidates.count, 2)
+    XCTAssertEqual(candidates.last?.status, .qualified)
+    XCTAssertNil(candidates.last?.throughput)
+
+    let execution = try await client.stageRun(
+      runID: "native-stage", stagingRoot: stagingRoot, stageID: "friend-beta")
+
+    XCTAssertEqual(execution.exitDisposition, .succeeded, execution.process.stderr.text)
+    XCTAssertTrue(
+      execution.events.contains { event in
+        event.kind == .known(.artifactDiscovered)
+          && event.payload["kind"] == .string("staged-candidate")
+      })
+    let stage = stagingRoot.appendingPathComponent("friend-beta")
+    XCTAssertTrue(
+      FileManager.default.fileExists(
+        atPath: stage.appendingPathComponent("staging-manifest.json").path))
+    XCTAssertFalse(
+      FileManager.default.fileExists(atPath: stage.appendingPathComponent("model.safetensors").path)
+    )
+  }
+
   func testResumesJournalSafeInterruptedRunThroughTrackedHandleWithoutChangingIdentity()
     async throws
   {

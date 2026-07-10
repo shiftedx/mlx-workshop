@@ -21,6 +21,16 @@ class PromotionError(RuntimeError):
     """Qualification or immutable staging prerequisites were not met."""
 
 
+def _read_object(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PromotionError(f"cannot read staging prerequisite {path.name}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise PromotionError(f"staging prerequisite {path.name} must be an object")
+    return value
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -315,3 +325,158 @@ def stage_candidate(
     }
     atomic_write_json(stage / "staging-manifest.json", manifest)
     return stage
+
+
+def qualified_run_evidence(*, run_dir: Path) -> dict[str, Any]:
+    """Revalidate and project only measured facts from one qualified uniform run."""
+    run_dir = run_dir.expanduser().resolve()
+    manifest = _read_object(run_dir / "run.json")
+    plan = _read_object(run_dir / "plan.json")
+    gate_document = _read_object(run_dir / "gates.json")
+    if manifest.get("schema_version") != 1 or plan.get("schema_version") != 1:
+        raise PromotionError("staging requires protocol-v1 run and plan evidence")
+    if manifest.get("run_id") != plan.get("run_id"):
+        raise PromotionError("run and plan identities differ")
+    if manifest.get("state") != "completed" or manifest.get("qualified") is not True:
+        raise PromotionError("only a completed qualified run can be staged")
+    if manifest.get("blockers"):
+        raise PromotionError("a run with active blockers cannot be staged")
+
+    exact_parent = manifest.get("exact_parent")
+    if not isinstance(exact_parent, str) or plan.get("exact_parent") != exact_parent:
+        raise PromotionError("the exact parent is missing or differs from the reviewed plan")
+    parent = Path(exact_parent).expanduser().resolve()
+    recipe = plan.get("recipe")
+    if not isinstance(recipe, dict) or recipe.get("schema_version") != 1:
+        raise PromotionError("staging requires a canonical real recipe")
+    modes = recipe.get("quant_modes")
+    if not isinstance(modes, list) or len(modes) != 1 or not isinstance(modes[0], str):
+        raise PromotionError("staging currently requires exactly one qualified candidate")
+    candidate = (run_dir / "artifacts" / f"model-{modes[0]}").resolve()
+    try:
+        candidate.relative_to((run_dir / "artifacts").resolve())
+    except ValueError as exc:
+        raise PromotionError("candidate path escapes the run artifacts directory") from exc
+
+    required = gate_document.get("required")
+    gate_items = gate_document.get("gates")
+    expected_required = recipe.get("validation", {}).get("required_gates")
+    if required != expected_required or not isinstance(required, list) or not required:
+        raise PromotionError("qualification gates do not match the reviewed recipe")
+    if not isinstance(gate_items, list):
+        raise PromotionError("qualification gate evidence is missing")
+    gates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    evidence_documents: dict[str, dict[str, Any]] = {}
+    for item in gate_items:
+        if not isinstance(item, dict):
+            raise PromotionError("qualification gate record is invalid")
+        name = item.get("gate")
+        evidence = item.get("evidence")
+        expected_sha256 = item.get("sha256")
+        if (
+            not isinstance(name, str)
+            or name in seen
+            or item.get("status") != "passed"
+            or not isinstance(evidence, str)
+            or not isinstance(expected_sha256, str)
+        ):
+            raise PromotionError("qualification gate record is incomplete or not passed")
+        seen.add(name)
+        evidence_path = (run_dir / evidence).resolve()
+        try:
+            evidence_path.relative_to(run_dir)
+        except ValueError as exc:
+            raise PromotionError("qualification evidence escapes the run directory") from exc
+        if not evidence_path.is_file() or _sha256(evidence_path) != expected_sha256:
+            raise PromotionError("qualification evidence is missing or changed")
+        evidence_documents[name] = _read_object(evidence_path)
+        gates.append({"name": name, "status": "passed", "evidence": [evidence]})
+    if seen != set(required):
+        raise PromotionError("required qualification gates are missing or duplicated")
+
+    parent_snapshot = snapshot_artifact(parent)
+    candidate_snapshot = snapshot_artifact(candidate)
+    provenance = evidence_documents.get("provenance-structure")
+    if (
+        not isinstance(provenance, dict)
+        or provenance.get("exact_parent") != str(parent)
+        or provenance.get("candidate") != str(candidate)
+        or provenance.get("candidate_snapshot") != candidate_snapshot
+    ):
+        raise PromotionError("candidate changed after qualification")
+    parent_parity = evidence_documents.get("parent-parity")
+    if (
+        not isinstance(parent_parity, dict)
+        or parent_parity.get("unchanged") is not True
+        or parent_parity.get("before") != parent_snapshot
+        or parent_parity.get("after") != parent_snapshot
+    ):
+        raise PromotionError("exact parent changed after qualification")
+
+    qualification = evaluate_qualification(
+        {
+            "schema_version": 1,
+            "exact_parent": parent_snapshot["tree_sha256"],
+            "candidate": candidate_snapshot["tree_sha256"],
+            "frozen_contract": {"recipe": recipe},
+            "required_gates": required,
+            "gates": gates,
+        },
+        evidence_root=run_dir,
+    )
+    if qualification.get("qualified") is not True:
+        raise PromotionError(
+            "qualification revalidation failed: " + ", ".join(qualification["blockers"])
+        )
+    return {
+        "schema_version": 1,
+        "run_id": manifest["run_id"],
+        "exact_parent": str(parent),
+        "candidate": str(candidate),
+        "recipe": recipe,
+        "parent_tree_sha256": parent_snapshot["tree_sha256"],
+        "candidate_tree_sha256": candidate_snapshot["tree_sha256"],
+        "parent_size_bytes": sum(
+            item.get("size_bytes", 0)
+            for item in parent_snapshot["entries"]
+            if item.get("type") == "file"
+        ),
+        "candidate_size_bytes": sum(
+            item.get("size_bytes", 0)
+            for item in candidate_snapshot["entries"]
+            if item.get("type") == "file"
+        ),
+        "qualified": qualification["qualified"],
+        "classification": qualification["classification"],
+        "gates": qualification["gates"],
+        "raw_evidence": qualification["raw_evidence"],
+    }
+
+
+def stage_qualified_run(
+    *, run_dir: Path, staging_root: Path, stage_id: str
+) -> tuple[Path, dict[str, Any]]:
+    """Revalidate a qualified uniform run and create reference-only staging metadata."""
+    evidence = qualified_run_evidence(run_dir=run_dir)
+    qualification = {
+        "schema_version": 1,
+        "qualified": evidence["qualified"],
+        "classification": evidence["classification"],
+        "exact_parent": evidence["parent_tree_sha256"],
+        "candidate": evidence["candidate_tree_sha256"],
+        "frozen_contract": {"recipe": evidence["recipe"]},
+        "required_gates": [item["name"] for item in evidence["gates"]],
+        "gates": evidence["gates"],
+        "raw_evidence": evidence["raw_evidence"],
+        "performance": None,
+        "blockers": [],
+    }
+    stage = stage_candidate(
+        parent=Path(evidence["exact_parent"]),
+        candidate=Path(evidence["candidate"]),
+        staging_root=staging_root,
+        stage_id=stage_id,
+        qualification=qualification,
+    )
+    return stage, qualification

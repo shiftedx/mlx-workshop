@@ -34,8 +34,33 @@ final class WorkshopViewStateTests: XCTestCase {
     qualifiedRun.runDirectory = URL(fileURLWithPath: "/tmp/runs/run-1")
     let qualified = WorkshopGuidance.resolve(
       run: qualifiedRun, planRequestPending: false, canCancel: false)
-    XCTAssertTrue(qualified.isComplete)
-    XCTAssertEqual(qualified.action, .showResult)
+    XCTAssertFalse(qualified.isComplete)
+    XCTAssertEqual(qualified.step, 5)
+    XCTAssertEqual(qualified.action, .stageResult)
+
+    qualifiedRun.stagedDirectory = URL(fileURLWithPath: "/tmp/staged/run-1")
+    let staged = WorkshopGuidance.resolve(
+      run: qualifiedRun, planRequestPending: false, canCancel: false)
+    XCTAssertTrue(staged.isComplete)
+    XCTAssertEqual(staged.action, .showResult)
+  }
+
+  func testQualifiedResultOffersOneImmutableStagingAction() {
+    XCTAssertEqual(
+      RunLifecycleAction.recommended(
+        state: .completed,
+        resumability: "not-applicable",
+        isQualified: true,
+        isTrackedByThisProcess: false,
+        isStaged: false),
+      .stage)
+    XCTAssertNil(
+      RunLifecycleAction.recommended(
+        state: .completed,
+        resumability: "not-applicable",
+        isQualified: true,
+        isTrackedByThisProcess: false,
+        isStaged: true))
   }
 
   func testGuidanceExplainsBlockedAndRecoverableStates() {

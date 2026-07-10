@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,10 +15,99 @@ from workflow_behavior import (  # noqa: E402
     build_promotion_gate_manifest,
     embedded_derivation_samples,
     resolve_behavior_experiment,
+    write_starter_behavior_recipe,
 )
+from workflow_behavior_executor import _default_runner, execute_behavior_contract  # noqa: E402
 
 
 class WorkflowBehaviorTests(unittest.TestCase):
+    def test_packaged_child_python_cannot_write_bytecode_into_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            step = {
+                "executable": "/usr/bin/true",
+                "arguments": [],
+                "working_directory": str(base),
+                "environment_keys": [],
+            }
+            with mock.patch("workflow_behavior_executor.subprocess.run") as run:
+                run.return_value.returncode = 0
+                code = _default_runner(step, base / "stdout.log", base / "stderr.log")
+
+            self.assertEqual(code, 0)
+            self.assertEqual(run.call_args.kwargs["env"]["PYTHONDONTWRITEBYTECODE"], "1")
+
+    def test_executor_runs_only_reviewed_steps_and_records_experimental_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            capabilities, recipe = self.valid_contract_inputs(base)
+            contract = resolve_behavior_experiment(
+                capabilities=capabilities, recipe=recipe, workspace=base, run_id="behavior-run"
+            )
+
+            def fake_runner(step, stdout_path, stderr_path):
+                stdout_path.write_text("ok\n", encoding="utf-8")
+                stderr_path.write_text("", encoding="utf-8")
+                run_dir = Path(contract["run_directory"])
+                if step["id"] == "apply-behavior-edit":
+                    candidate = run_dir / "artifacts" / "behavior-edited-candidate"
+                    candidate.mkdir(parents=True)
+                    (candidate / "config.json").write_text(
+                        json.dumps({"behavior_edit": {"edited_modules": [{}, {}, {}, {}]}}),
+                        encoding="utf-8",
+                    )
+                if step["id"].startswith("evaluate-"):
+                    output = Path(step["arguments"][step["arguments"].index("--output") + 1])
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    candidate = "candidate" in step["id"]
+                    output.write_text(
+                        json.dumps({
+                            "summary": {
+                                "refusal_rate": 0.2 if candidate else 0.8,
+                                "benign_refusal_rate": 0.1,
+                            },
+                            "refusal": [{}, {}],
+                            "benign_sensitive": [{}, {}],
+                        }),
+                        encoding="utf-8",
+                    )
+                return 0
+
+            from io import StringIO
+
+            stream = StringIO()
+            code = execute_behavior_contract(contract, stream, runner=fake_runner)
+            result = json.loads(
+                (Path(contract["run_directory"]) / "result.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(code, 0)
+            self.assertEqual(result["state"], "completed")
+            self.assertEqual(result["classification"], "experimental")
+            self.assertFalse(result["qualified"])
+            self.assertEqual(len(result["categories"]), 2)
+            self.assertIn('"type":"run.completed"', stream.getvalue())
+
+    def test_starter_recipe_is_separated_and_builds_the_reviewed_experiment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            capabilities, _recipe = self.valid_contract_inputs(base)
+            recipe_path = write_starter_behavior_recipe(
+                capabilities=capabilities, destination=base / "starter"
+            )
+            recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+
+            contract = resolve_behavior_experiment(
+                capabilities=capabilities,
+                recipe=recipe,
+                workspace=base,
+                run_id="starter-behavior",
+            )
+
+            self.assertEqual(contract["blockers"], [])
+            self.assertEqual(len(contract["steps"]), 6)
+            self.assertEqual(len({item["group"] for item in recipe["datasets"].values()}), 4)
+
     def test_unknown_adapter_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

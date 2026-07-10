@@ -2,6 +2,16 @@ import SwiftUI
 
 struct SensitivityAtlasView: View {
   @EnvironmentObject private var store: WorkshopStore
+  let onAnalyze: @MainActor () async -> Void
+  let onMaterialize: @MainActor () async -> Void
+
+  init(
+    onAnalyze: @escaping @MainActor () async -> Void = {},
+    onMaterialize: @escaping @MainActor () async -> Void = {}
+  ) {
+    self.onAnalyze = onAnalyze
+    self.onMaterialize = onMaterialize
+  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -29,6 +39,17 @@ struct SensitivityAtlasView: View {
           StatusPill(
             text: "\(store.protectedCount) protected", symbol: "lock.fill",
             color: WorkshopTheme.secondaryInk)
+          Button {
+            Task { await onMaterialize() }
+          } label: {
+            Label("Create measured candidate", systemImage: "shippingbox")
+          }
+          .buttonStyle(PrimaryActionButtonStyle())
+          .disabled(store.sensitivityCandidateID == nil || store.isRunning)
+          .help(
+            store.sensitivityCandidateID == nil
+              ? "Choose a measured 4/8-bit assignment"
+              : "Materialize this measured assignment without changing the parent")
         }
         Button {
           store.expertMode.toggle()
@@ -50,9 +71,10 @@ struct SensitivityAtlasView: View {
             "Choose a format in Settings, then review the plan. You will see disk and memory estimates before confirming anything."
           )
         } actions: {
-          Button("Adjust settings") {
-            store.showInspector = true
+          Button(store.sensitivityPending ? "Measuring…" : "Analyze sensitivity") {
+            Task { await onAnalyze() }
           }
+          .disabled(store.sensitivityPending)
           .accessibilityIdentifier("workbench.empty.editRecipe")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

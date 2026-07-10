@@ -2,15 +2,15 @@
 
 ## 0.1.0-beta.1 — Unreleased binary
 
-### Guided workflow update
-
-- Replaced the technical first-run shell with plain-language model and results-folder setup.
-- Added a state-driven four-step guide with one prominent next action from plan review through verification.
-- Wired result reveal, logs, cancellation, resume, verification, run history, and host refresh to real actions.
-- Hidden demo-only Compare, Behavior, and Sensitivity surfaces from live navigation.
-- Added native XCUITest coverage for fresh setup and a real bundled-runtime tiny-model conversion.
-- Fixed a plan-confirmation split-view crash and an evidence drawer layout that could move the guide off screen.
-
+- Plain-language folder setup and a state-driven five-step conversion/release guide.
+- Live Compare surface with parent-relative evidence, honest optional metrics, and
+  immutable reference-only local release staging.
+- Measured Llama layer-group sensitivity and exact mixed-precision materialization,
+  explicitly classified as experimental and unqualified.
+- Eligibility-gated behavior experiment executor with separated data groups,
+  allowlisted steps, logs, and fail-closed held-out promotion gates.
+- Advertised-VLM image smoke testing through the bundled `mlx-vlm` runtime and
+  read-only MTPLX/MTP compatibility inspection.
 - Native macOS workbench for local model/workspace selection and capability inspection.
 - Closed uniform MXFP4, MXFP8, and affine planning with conservative resource review.
 - Dedicated weight-changing confirmation with exact arguments and required gates.
@@ -18,7 +18,7 @@
   tracked cancellation/interruption/recovery.
 - Explicit resume, recovered cancellation, and post-completion qualification actions.
 - Real deterministic tiny-Llama conversion and hashed three-gate qualification proof.
-- Self-contained arm64 CPython 3.11, MLX 0.31.2, and MLX-LM 0.31.3 runtime.
+- Self-contained arm64 CPython 3.11, MLX 0.31.2, MLX-LM 0.31.3, and MLX-VLM 0.6.3 runtime.
 - Complete runtime-manifest, sandbox, privacy-manifest, DMG, and release-verifier tooling.
 
 The public binary remains unreleased until Developer ID signing and Apple notarization pass.

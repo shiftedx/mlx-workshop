@@ -5,6 +5,7 @@ struct RunDrawerView: View {
   @EnvironmentObject private var store: WorkshopStore
   @State private var lifecycleActionInProgress = false
   let onQualify: @MainActor (String) async -> Void
+  let onStage: @MainActor (String) async -> Void
   let onResume: @MainActor (String) async -> Void
   let onCancelRecovered: @MainActor (String) async -> Void
 
@@ -170,7 +171,8 @@ struct RunDrawerView: View {
         state: run.state,
         resumability: run.resumability,
         isQualified: run.isQualified,
-        isTrackedByThisProcess: run.requestID != nil)
+        isTrackedByThisProcess: run.requestID != nil,
+        isStaged: run.stagedDirectory != nil)
       {
         Button {
           perform(action, runID: run.id)
@@ -206,6 +208,7 @@ struct RunDrawerView: View {
     Task { @MainActor in
       switch action {
       case .qualify: await onQualify(runID)
+      case .stage: await onStage(runID)
       case .resume: await onResume(runID)
       case .cancelRecovered: await onCancelRecovered(runID)
       }
@@ -289,6 +292,7 @@ extension RunLifecycleAction {
   var identifier: String {
     switch self {
     case .qualify: "qualify"
+    case .stage: "stage"
     case .resume: "resume"
     case .cancelRecovered: "cancelRecovered"
     }
@@ -297,6 +301,7 @@ extension RunLifecycleAction {
   var label: String {
     switch self {
     case .qualify: "Verify result"
+    case .stage: "Prepare local release"
     case .resume: "Resume safe run"
     case .cancelRecovered: "Cancel recovered run"
     }
@@ -305,6 +310,7 @@ extension RunLifecycleAction {
   var symbol: String {
     switch self {
     case .qualify: "checkmark.seal"
+    case .stage: "shippingbox"
     case .resume: "arrow.clockwise"
     case .cancelRecovered: "stop.fill"
     }
@@ -313,6 +319,7 @@ extension RunLifecycleAction {
   var help: String {
     switch self {
     case .qualify: "Check loading, deterministic behavior, and parent consistency"
+    case .stage: "Create immutable release metadata without copying or changing either model"
     case .resume: "Continue this journal-safe interrupted run without changing its identity"
     case .cancelRecovered: "Write this run's cooperative cancellation marker and await its journal"
     }

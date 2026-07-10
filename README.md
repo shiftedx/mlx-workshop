@@ -4,16 +4,20 @@ MLX Workshop is a native macOS app for inspecting compatible local MLX models,
 reviewing an exact quantization plan, creating a new candidate without changing
 the parent, and qualifying the result from hashed evidence.
 
-The live app presents that as a guided four-step journey: review a safe plan,
-confirm it, create the optimized copy, and verify the result. Setup explains what
-belongs in each selected folder, and one prominent action always identifies the
-next step. Advanced settings, commands, logs, and evidence remain available without
-being prerequisites for using the app.
+The app presents that as a guided five-step journey: review a safe plan, confirm it,
+create the optimized copy, verify it, and prepare an immutable local release record.
+Setup explains which folders to choose, and one primary action identifies the next
+step. Advanced settings, commands, logs, and raw evidence stay available on demand.
 
 The beta is deliberately narrow. It supports capability-routed uniform MXFP4,
 MXFP8, and affine conversion for inspected float models that MLX-LM can load.
 Unknown tensor semantics, already-quantized sources, unsupported controls, unsafe
 workspace paths, and incomplete evidence stop with an explicit blocker.
+
+Live experimental tools can measure and materialize Llama mixed-precision candidates,
+run a reviewed behavior-edit experiment for eligible quantized Qwen3.5 models, smoke
+test an advertised vision model with a local image, and inspect MTPLX/MTP compatibility.
+Experimental candidates are not silently promoted as qualified releases.
 
 ## Beta guarantees
 
@@ -25,18 +29,21 @@ workspace paths, and incomplete evidence stop with an explicit blocker.
   process-specific cooperative cancellation.
 - Completion and qualification are separate states. Qualification requires hashed
   structural, deterministic runtime, and parent-parity evidence.
+- Compare shows only recorded parent-relative facts; missing performance or quality
+  metrics are labeled “Not measured.”
 - Relaunch recovery never automatically starts or resumes work.
 - The app has no telemetry, account system, upload path, or model registry integration.
 
 The deterministic tiny Llama fixture proves the complete real conversion and
-qualification route without making a model-quality claim. Native UI automation
-also runs that route through the exact Python/MLX runtime bundled in the app.
+qualification route without making a model-quality claim.
+Two native UI journeys exercise fresh setup and the complete deterministic interface
+flow, while real backend and packaged-runtime tests execute independently.
 
 ## Requirements
 
 - Apple Silicon Mac
 - macOS 14 or newer
-- About 1 GB free for the app, installer, and temporary packaging files
+- About 2 GB free for the app, installer, and temporary packaging files
 - Additional free space appropriate to the model and reviewed plan
 
 The release app contains its own arm64 CPython/MLX runtime. Friends do not need
@@ -90,8 +97,8 @@ xcrun swift-format lint --recursive MLXWorkshop/Sources MLXWorkshop/Tests MLXWor
 scripts/release/verify_public_release.sh
 ```
 
-The current suite contains 56 Python tests, 96 Swift tests, and two native UI
-journeys covering fresh setup and real conversion through verification.
+The current release gate contains 67 Python tests, 101 Swift tests, two native UI
+journeys, real tiny-model conversion/mixed-precision evidence, and package/DMG checks.
 
 See [BETA_REPORT.md](BETA_REPORT.md),
 [docs/BETA_SUPPORT_MATRIX.md](docs/BETA_SUPPORT_MATRIX.md), and

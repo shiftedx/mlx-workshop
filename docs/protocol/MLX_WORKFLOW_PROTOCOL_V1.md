@@ -32,6 +32,20 @@ The v1 command surface is:
 | `cancel-status` | Report or request cooperative cancellation | No direct weight mutation |
 | `qualify` | Evaluate declared gates against an exact parent | Evidence/staging only |
 
+The beta CLI also exposes compatible, append-only command extensions. They do not
+change the frozen plan/run journal contract:
+
+| Command | Purpose | Mutates model weights |
+| --- | --- | --- |
+| `evidence` | Project verified parent-relative candidate evidence | No |
+| `stage` | Create an immutable reference-only local release record | No |
+| `sensitivity` | Measure parent-relative layer-group KL on calibration tokens | No |
+| `materialize-mixed` | Save one measured mixed-precision assignment as a new candidate | New outputs only |
+| `behavior-plan` | Validate eligibility and freeze an allowlisted behavior experiment | No |
+| `behavior-run` | Execute a reviewed behavior contract and record held-out evidence | New outputs only |
+| `vision-smoke` | Run a local image-generation smoke test for an advertised VLM | No |
+| `mtp-inspect` | Ask an installed MTPLX CLI for read-only MTP compatibility | No |
+
 Exit codes are stable: `0` success, `2` invalid invocation/input, `3` capability or
 plan blocker, `4` protocol mismatch/corrupt state, `5` execution failure, and `6`
 cancelled/interrupted. A nonzero exit never substitutes for a terminal event when a

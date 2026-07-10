@@ -339,19 +339,31 @@ struct WorkshopRootView: View {
     case .workbench:
       WorkbenchView(
         onQualify: { await workflowSession.qualifyRun(runID: $0, into: store) },
+        onStage: { await workflowSession.stageRun(runID: $0, into: store) },
         onResume: { await workflowSession.resumeRun(runID: $0, into: store) },
         onCancelRecovered: {
           await workflowSession.requestRecoveredCancellation(runID: $0, into: store)
-        })
+        },
+        onAnalyzeSensitivity: { await workflowSession.analyzeSensitivity(store) },
+        onMaterializeMixed: { await workflowSession.materializeMixedCandidate(store) })
     case .runs:
       RunsView(
         onQualify: { await workflowSession.qualifyRun(runID: $0, into: store) },
+        onStage: { await workflowSession.stageRun(runID: $0, into: store) },
         onResume: { await workflowSession.resumeRun(runID: $0, into: store) },
         onCancelRecovered: {
           await workflowSession.requestRecoveredCancellation(runID: $0, into: store)
         })
-    case .compare: CompareView()
-    case .behavior: BehaviorLabView()
+    case .compare:
+      CompareView(onStage: { await workflowSession.stageRun(runID: $0, into: store) })
+    case .behavior:
+      BehaviorLabView(
+        onPlan: { await workflowSession.planBehaviorExperiment(store) },
+        onRun: { await workflowSession.runBehaviorExperiment(store) })
+    case .extensions:
+      ExtensionsView(
+        onInspectMTP: { await workflowSession.inspectMTPExtension(store) },
+        onVisionImage: { await workflowSession.runVisionSmoke(imageURL: $0, store: store) })
     case .host: HostView(onRefresh: { await workflowSession.refreshHost(store) })
     }
   }

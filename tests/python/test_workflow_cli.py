@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -20,6 +21,8 @@ CLI = ROOT / "scripts" / "mlx_workflow_cli.py"
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from workflow_plan import resolve_plan
+from workflow_promotion import snapshot_artifact
+import mlx_workflow_cli
 
 
 def invoke(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -156,7 +159,444 @@ def fixture_plan(base: Path, run_id: str, scenario: str, *, model: Path | None =
     return plan_path
 
 
+def qualified_run_fixture(base: Path) -> tuple[Path, Path, Path]:
+    parent = base / "parent"
+    run_dir = base / "run-qualified"
+    candidate = run_dir / "artifacts" / "model-mxfp4"
+    evaluations = run_dir / "evaluations"
+    for path in (parent, candidate, evaluations):
+        path.mkdir(parents=True)
+    (parent / "weights.bin").write_bytes(b"immutable-parent")
+    (candidate / "weights.bin").write_bytes(b"qualified-candidate")
+    parent_snapshot = snapshot_artifact(parent)
+    candidate_snapshot = snapshot_artifact(candidate)
+    recipe = canonical_recipe(parent)
+    evidence_paths = {
+        "provenance-structure": evaluations / "provenance-structure.json",
+        "deterministic-language-schema": evaluations / "deterministic-language-schema.json",
+        "parent-parity": evaluations / "parent-parity.json",
+    }
+    evidence_paths["provenance-structure"].write_text(
+        json.dumps(
+            {
+                "exact_parent": str(parent.resolve()),
+                "candidate": str(candidate.resolve()),
+                "candidate_snapshot": candidate_snapshot,
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_paths["deterministic-language-schema"].write_text(
+        json.dumps({"status": "passed"}), encoding="utf-8"
+    )
+    evidence_paths["parent-parity"].write_text(
+        json.dumps(
+            {
+                "before": parent_snapshot,
+                "after": parent_snapshot,
+                "unchanged": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": run_dir.name,
+                "state": "completed",
+                "qualified": True,
+                "exact_parent": str(parent.resolve()),
+                "blockers": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "plan.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": run_dir.name,
+                "exact_parent": str(parent.resolve()),
+                "recipe": recipe,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "gates.json").write_text(
+        json.dumps(
+            {
+                "required": recipe["validation"]["required_gates"],
+                "gates": [
+                    {
+                        "gate": name,
+                        "status": "passed",
+                        "evidence": str(evidence_paths[name].relative_to(run_dir)),
+                        "sha256": sha256(evidence_paths[name]),
+                    }
+                    for name in recipe["validation"]["required_gates"]
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return run_dir, parent, candidate
+
+
 class WorkflowCLITests(unittest.TestCase):
+    def test_mtp_inspect_finds_user_local_install_when_finder_path_is_minimal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            executable = base / ".local/bin/mtplx"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("#!/bin/sh\n", encoding="utf-8")
+            executable.chmod(0o755)
+            model = base / "model"
+            model.mkdir()
+            args = types.SimpleNamespace(model=model, machine=False, run_id="mtp-check")
+            report = {"compatibility": {"supported": True, "can_run": True}}
+            completed = subprocess.CompletedProcess(
+                [str(executable)], 0, stdout=json.dumps(report), stderr=""
+            )
+
+            with mock.patch("mlx_workflow_cli.shutil.which", return_value=None), mock.patch(
+                "mlx_workflow_cli.Path.home", return_value=base
+            ), mock.patch("mlx_workflow_cli.subprocess.run", return_value=completed) as run:
+                code = mlx_workflow_cli.command_mtp_inspect(args)
+
+            self.assertEqual(code, 0)
+            self.assertEqual(run.call_args.args[0][0], str(executable))
+
+    def test_vision_smoke_blocks_a_text_only_model_before_launching_mlx_vlm(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            image = base / "input.png"
+            image.write_bytes(b"not decoded because capability blocks first")
+            result = invoke(
+                "vision-smoke",
+                "--model",
+                str(ROOT / "tests" / "fixtures" / "tiny-llama-float"),
+                "--image",
+                str(image),
+                "--workspace",
+                str(base),
+                "--run-id",
+                "vision-text-only",
+            )
+
+            self.assertEqual(result.returncode, 3, result.stderr)
+            item = events(result)[-1]
+            self.assertEqual(item["type"], "plan.blocked")
+            self.assertFalse(item["payload"]["supported"])
+            self.assertFalse((base / ".extension-checks").exists())
+
+    def test_behavior_plan_reports_adapter_blocker_for_an_ineligible_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            result = invoke(
+                "behavior-plan",
+                "--model",
+                str(ROOT / "tests" / "fixtures" / "tiny-llama-float"),
+                "--workspace",
+                str(base),
+                "--run-id",
+                "behavior-ineligible",
+            )
+
+            self.assertEqual(result.returncode, 3, result.stderr)
+            item = events(result)[-1]
+            self.assertEqual(item["type"], "plan.blocked")
+            self.assertEqual(item["stage"], "behavior-plan")
+            self.assertEqual(item["payload"]["steps"], [])
+            self.assertIn(
+                "activation-signature-mismatch",
+                {blocker["code"] for blocker in item["payload"]["blockers"]},
+            )
+
+    def test_sensitivity_and_materialization_are_measured_reloadable_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            model = ROOT / "tests" / "fixtures" / "tiny-llama-float"
+            analysis_path = base / "sensitivity.json"
+            measured = invoke(
+                "sensitivity",
+                "--model",
+                str(model),
+                "--workspace",
+                str(base),
+                "--run-id",
+                "tiny-sensitivity",
+                "--output",
+                str(analysis_path),
+            )
+
+            self.assertEqual(measured.returncode, 0, measured.stderr)
+            item = events(measured)[-1]
+            self.assertEqual(item["type"], "evaluation.recorded")
+            self.assertEqual(item["stage"], "sensitivity")
+            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+            self.assertEqual(analysis["analysis"]["status"], "supported")
+            self.assertEqual(len(analysis["analysis"]["measurements"]), 4)
+            selected = next(
+                candidate
+                for candidate in analysis["analysis"]["frontier"]
+                if any(precision != "fp16" for _module, precision in candidate["assignments"])
+            )
+            output = base / "mixed-model"
+            materialized = invoke(
+                "materialize-mixed",
+                "--analysis",
+                str(analysis_path),
+                "--candidate-id",
+                selected["candidate_id"],
+                "--output",
+                str(output),
+                "--run-id",
+                "tiny-materialize",
+            )
+
+            self.assertEqual(materialized.returncode, 0, materialized.stderr)
+            artifact = events(materialized)[-1]
+            self.assertEqual(artifact["type"], "artifact.discovered")
+            self.assertTrue((output / "mixed-precision-assignment.json").is_file())
+
+    def test_evidence_command_reports_verified_parent_relative_facts_without_invention(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir, parent, candidate = qualified_run_fixture(Path(directory))
+
+            result = invoke("evidence", "--run-dir", str(run_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            item = events(result)[-1]
+            self.assertEqual(item["type"], "evaluation.recorded")
+            self.assertEqual(item["stage"], "compare")
+            payload = item["payload"]
+            self.assertEqual(payload["run_id"], run_dir.name)
+            self.assertEqual(payload["exact_parent"], str(parent.resolve()))
+            self.assertEqual(payload["candidate"], str(candidate.resolve()))
+            self.assertTrue(payload["qualified"])
+            self.assertEqual(payload["classification"], "qualified")
+            self.assertEqual(
+                [gate["name"] for gate in payload["gates"]],
+                canonical_recipe(parent)["validation"]["required_gates"],
+            )
+            self.assertNotIn("throughput", payload)
+            self.assertNotIn("kl", payload)
+            self.assertNotIn("score", payload)
+
+    def test_stage_command_creates_an_immutable_reference_only_release_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent = base / "parent"
+            run_dir = base / "run-qualified"
+            candidate = run_dir / "artifacts" / "model-mxfp4"
+            staging_root = base / "staging"
+            evaluations = run_dir / "evaluations"
+            for path in (parent, candidate, staging_root, evaluations):
+                path.mkdir(parents=True)
+            (parent / "weights.bin").write_bytes(b"immutable-parent")
+            (candidate / "weights.bin").write_bytes(b"qualified-candidate")
+            parent_before = snapshot_artifact(parent)
+            candidate_before = snapshot_artifact(candidate)
+            evidence_paths = {
+                "provenance-structure": evaluations / "provenance-structure.json",
+                "deterministic-language-schema": evaluations
+                / "deterministic-language-schema.json",
+                "parent-parity": evaluations / "parent-parity.json",
+            }
+            evidence_paths["provenance-structure"].write_text(
+                json.dumps(
+                    {
+                        "exact_parent": str(parent.resolve()),
+                        "candidate": str(candidate.resolve()),
+                        "candidate_snapshot": candidate_before,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            evidence_paths["deterministic-language-schema"].write_text(
+                json.dumps({"status": "passed"}), encoding="utf-8"
+            )
+            evidence_paths["parent-parity"].write_text(
+                json.dumps(
+                    {
+                        "before": parent_before,
+                        "after": parent_before,
+                        "unchanged": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recipe = canonical_recipe(parent)
+            (run_dir / "run.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_dir.name,
+                        "state": "completed",
+                        "qualified": True,
+                        "exact_parent": str(parent.resolve()),
+                        "blockers": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "plan.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_dir.name,
+                        "exact_parent": str(parent.resolve()),
+                        "recipe": recipe,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "gates.json").write_text(
+                json.dumps(
+                    {
+                        "required": recipe["validation"]["required_gates"],
+                        "gates": [
+                            {
+                                "gate": name,
+                                "status": "passed",
+                                "evidence": str(evidence_paths[name].relative_to(run_dir)),
+                                "sha256": sha256(evidence_paths[name]),
+                            }
+                            for name in recipe["validation"]["required_gates"]
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = invoke(
+                "stage",
+                "--run-dir",
+                str(run_dir),
+                "--staging-root",
+                str(staging_root),
+                "--stage-id",
+                "friend-beta",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            staged = staging_root / "friend-beta"
+            self.assertEqual(snapshot_artifact(parent), parent_before)
+            self.assertEqual(snapshot_artifact(candidate), candidate_before)
+            self.assertEqual(
+                sorted(path.name for path in staged.iterdir()),
+                ["hashes.json", "rollback.json", "staging-manifest.json"],
+            )
+            manifest = json.loads((staged / "staging-manifest.json").read_text())
+            self.assertTrue(manifest["qualified"])
+            self.assertEqual(manifest["artifact_mode"], "reference-only")
+            self.assertEqual(manifest["exact_parent"], str(parent.resolve()))
+            self.assertEqual(manifest["candidate"], str(candidate.resolve()))
+            emitted = events(result)
+            self.assertEqual(emitted[-1]["type"], "artifact.discovered")
+            self.assertEqual(emitted[-1]["payload"]["kind"], "staged-candidate")
+
+    def test_stage_command_rejects_a_candidate_changed_after_qualification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            parent = base / "parent"
+            run_dir = base / "run-qualified"
+            candidate = run_dir / "artifacts" / "model-mxfp4"
+            staging_root = base / "staging"
+            evaluations = run_dir / "evaluations"
+            for path in (parent, candidate, staging_root, evaluations):
+                path.mkdir(parents=True)
+            (parent / "weights.bin").write_bytes(b"immutable-parent")
+            (candidate / "weights.bin").write_bytes(b"qualified-candidate")
+            parent_snapshot = snapshot_artifact(parent)
+            candidate_snapshot = snapshot_artifact(candidate)
+            recipe = canonical_recipe(parent)
+            evidence_paths = {
+                "provenance-structure": evaluations / "provenance-structure.json",
+                "deterministic-language-schema": evaluations
+                / "deterministic-language-schema.json",
+                "parent-parity": evaluations / "parent-parity.json",
+            }
+            evidence_paths["provenance-structure"].write_text(
+                json.dumps(
+                    {
+                        "exact_parent": str(parent.resolve()),
+                        "candidate": str(candidate.resolve()),
+                        "candidate_snapshot": candidate_snapshot,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            evidence_paths["deterministic-language-schema"].write_text(
+                json.dumps({"status": "passed"}), encoding="utf-8"
+            )
+            evidence_paths["parent-parity"].write_text(
+                json.dumps(
+                    {
+                        "before": parent_snapshot,
+                        "after": parent_snapshot,
+                        "unchanged": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "run.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_dir.name,
+                        "state": "completed",
+                        "qualified": True,
+                        "exact_parent": str(parent.resolve()),
+                        "blockers": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "plan.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": run_dir.name,
+                        "exact_parent": str(parent.resolve()),
+                        "recipe": recipe,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "gates.json").write_text(
+                json.dumps(
+                    {
+                        "required": recipe["validation"]["required_gates"],
+                        "gates": [
+                            {
+                                "gate": name,
+                                "status": "passed",
+                                "evidence": str(evidence_paths[name].relative_to(run_dir)),
+                                "sha256": sha256(evidence_paths[name]),
+                            }
+                            for name in recipe["validation"]["required_gates"]
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (candidate / "weights.bin").write_bytes(b"changed-after-qualification")
+
+            result = invoke(
+                "stage",
+                "--run-dir",
+                str(run_dir),
+                "--staging-root",
+                str(staging_root),
+                "--stage-id",
+                "changed-candidate",
+            )
+
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("candidate changed after qualification", result.stderr)
+            self.assertFalse((staging_root / "changed-candidate").exists())
+
     def test_inline_plan_options_normalize_to_the_canonical_real_recipe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

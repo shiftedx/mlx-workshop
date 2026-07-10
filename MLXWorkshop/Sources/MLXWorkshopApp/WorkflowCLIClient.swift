@@ -502,6 +502,111 @@ actor WorkflowCLIClient {
       onEvent: onEvent)
   }
 
+  func evidence(runID: String) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    let request = makeRequest(
+      arguments: [
+        runtime.cliURL.path,
+        "--machine",
+        "evidence",
+        "--run-dir",
+        runWorkspaceURL.appendingPathComponent(runID, isDirectory: true).path,
+      ])
+    return try await coordinator.execute(request)
+  }
+
+  func analyzeSensitivity(modelURL: URL, runID: String) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    let request = makeRequest(arguments: [
+      runtime.cliURL.path, "--machine", "sensitivity",
+      "--model", try WorkflowFilePath.canonical(modelURL),
+      "--workspace", runWorkspaceURL.path, "--run-id", runID,
+    ])
+    return try await coordinator.execute(request)
+  }
+
+  func materializeMixed(
+    analysisURL: URL, candidateID: String, outputURL: URL, runID: String
+  ) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    let request = makeRequest(arguments: [
+      runtime.cliURL.path, "--machine", "materialize-mixed",
+      "--analysis", try WorkflowFilePath.canonical(analysisURL),
+      "--candidate-id", candidateID,
+      "--output", outputURL.standardizedFileURL.path,
+      "--run-id", runID,
+    ])
+    return try await coordinator.execute(request)
+  }
+
+  func planBehavior(modelURL: URL, runID: String) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    let request = makeRequest(arguments: [
+      runtime.cliURL.path, "--machine", "behavior-plan",
+      "--model", try WorkflowFilePath.canonical(modelURL),
+      "--workspace", runWorkspaceURL.path, "--run-id", runID,
+    ])
+    return try await coordinator.execute(request)
+  }
+
+  func runBehavior(contractURL: URL) async throws -> WorkflowExecution {
+    let request = makeRequest(arguments: [
+      runtime.cliURL.path, "--machine", "behavior-run",
+      "--contract", try WorkflowFilePath.canonical(contractURL),
+    ])
+    return try await coordinator.execute(request)
+  }
+
+  func inspectMTP(modelURL: URL, runID: String) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    return try await coordinator.execute(
+      makeRequest(arguments: [
+        runtime.cliURL.path, "--machine", "mtp-inspect",
+        "--model", try WorkflowFilePath.canonical(modelURL), "--run-id", runID,
+      ]))
+  }
+
+  func visionSmoke(modelURL: URL, imageURL: URL, runID: String) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    return try await coordinator.execute(
+      makeRequest(arguments: [
+        runtime.cliURL.path, "--machine", "vision-smoke",
+        "--model", try WorkflowFilePath.canonical(modelURL),
+        "--image", try WorkflowFilePath.canonical(imageURL),
+        "--workspace", runWorkspaceURL.path, "--run-id", runID,
+      ]))
+  }
+
+  func stageRun(
+    runID: String,
+    stagingRoot: URL,
+    stageID: String,
+    onEvent: @escaping EventHandler = { _ in }
+  ) async throws -> WorkflowExecution {
+    try validate(runID: runID)
+    guard stagingRoot.isFileURL else {
+      throw WorkflowCLIClientError.invalidPathRelationship(
+        "The staging destination must be a local folder.")
+    }
+    let canonicalRoot = try WorkflowFilePath.canonical(stagingRoot)
+    guard FileManager.default.fileExists(atPath: canonicalRoot) else {
+      throw WorkflowCLIClientError.missingRuntimeFile(canonicalRoot)
+    }
+    let request = makeRequest(
+      arguments: [
+        runtime.cliURL.path,
+        "--machine",
+        "stage",
+        "--run-dir",
+        runWorkspaceURL.appendingPathComponent(runID, isDirectory: true).path,
+        "--staging-root",
+        canonicalRoot,
+        "--stage-id",
+        stageID,
+      ])
+    return try await coordinator.execute(request, onEvent: onEvent)
+  }
+
   func resumeRun(
     runID: String,
     onEvent: @escaping EventHandler = { _ in }

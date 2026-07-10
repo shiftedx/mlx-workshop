@@ -130,6 +130,13 @@ struct WorkflowPresentationAdapter: WorkshopEventProjecting {
       manifest.qualified == true
       && recovered.effectiveState == .completed
       && manifest.blockers.isEmpty
+    let staged = recovered.runDirectoryURL.deletingLastPathComponent()
+      .appendingPathComponent("staged-candidates/\(manifest.runID)", isDirectory: true)
+    if FileManager.default.fileExists(
+      atPath: staged.appendingPathComponent("staging-manifest.json").path)
+    {
+      run.stagedDirectory = staged
+    }
     return run
   }
 
@@ -150,7 +157,8 @@ struct WorkflowPresentationAdapter: WorkshopEventProjecting {
         stderrLog: run.stderrLog,
         command: run.command,
         resumability: run.resumability,
-        isQualified: run.isQualified
+        isQualified: run.isQualified,
+        stagedDirectory: run.stagedDirectory
       )
     }
     let failures = batch.failures.enumerated().map { offset, failure in

@@ -4,17 +4,26 @@ struct WorkbenchView: View {
   @EnvironmentObject private var store: WorkshopStore
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let onQualify: @MainActor (String) async -> Void
+  let onStage: @MainActor (String) async -> Void
   let onResume: @MainActor (String) async -> Void
   let onCancelRecovered: @MainActor (String) async -> Void
+  let onAnalyzeSensitivity: @MainActor () async -> Void
+  let onMaterializeMixed: @MainActor () async -> Void
 
   init(
     onQualify: @escaping @MainActor (String) async -> Void = { _ in },
+    onStage: @escaping @MainActor (String) async -> Void = { _ in },
     onResume: @escaping @MainActor (String) async -> Void = { _ in },
-    onCancelRecovered: @escaping @MainActor (String) async -> Void = { _ in }
+    onCancelRecovered: @escaping @MainActor (String) async -> Void = { _ in },
+    onAnalyzeSensitivity: @escaping @MainActor () async -> Void = {},
+    onMaterializeMixed: @escaping @MainActor () async -> Void = {}
   ) {
     self.onQualify = onQualify
+    self.onStage = onStage
     self.onResume = onResume
     self.onCancelRecovered = onCancelRecovered
+    self.onAnalyzeSensitivity = onAnalyzeSensitivity
+    self.onMaterializeMixed = onMaterializeMixed
   }
 
   var body: some View {
@@ -40,10 +49,11 @@ struct WorkbenchView: View {
         }
         WorkshopGuideView(
           onQualify: onQualify,
+          onStage: onStage,
           onResume: onResume,
           onCancelRecovered: onCancelRecovered)
         Divider().overlay(WorkshopTheme.divider)
-        SensitivityAtlasView()
+        SensitivityAtlasView(onAnalyze: onAnalyzeSensitivity, onMaterialize: onMaterializeMixed)
           .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
           .clipped()
 
@@ -51,6 +61,7 @@ struct WorkbenchView: View {
           Divider().overlay(WorkshopTheme.divider)
           RunDrawerView(
             onQualify: onQualify,
+            onStage: onStage,
             onResume: onResume,
             onCancelRecovered: onCancelRecovered
           )

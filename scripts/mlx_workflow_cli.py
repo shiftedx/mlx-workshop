@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 from workflow_executor import qualify_run, resume_run, run_plan
 from workflow_host import snapshot_host
 from workflow_plan import FIXTURE_SCENARIOS, resolve_plan
+from workflow_promotion import PromotionError, qualified_run_evidence, stage_qualified_run
 from workflow_protocol import (
     MachineWriter,
     ProtocolError,
@@ -80,6 +85,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     qualify = subparsers.add_parser("qualify")
     qualify.add_argument("--run-dir", type=Path, required=True)
+
+    stage = subparsers.add_parser("stage")
+    stage.add_argument("--run-dir", type=Path, required=True)
+    stage.add_argument("--staging-root", type=Path, required=True)
+    stage.add_argument("--stage-id", required=True)
+
+    evidence = subparsers.add_parser("evidence")
+    evidence.add_argument("--run-dir", type=Path, required=True)
+
+    sensitivity = subparsers.add_parser("sensitivity")
+    sensitivity.add_argument("--model", type=Path, required=True)
+    sensitivity.add_argument("--workspace", type=Path, required=True)
+    sensitivity.add_argument("--run-id", required=True)
+    sensitivity.add_argument("--max-kl", type=float, default=0.20)
+    sensitivity.add_argument("--output", type=Path)
+
+    materialize = subparsers.add_parser("materialize-mixed")
+    materialize.add_argument("--analysis", type=Path, required=True)
+    materialize.add_argument("--candidate-id", required=True)
+    materialize.add_argument("--output", type=Path, required=True)
+    materialize.add_argument("--run-id", default="materialize-mixed")
+
+    behavior_plan = subparsers.add_parser("behavior-plan")
+    behavior_plan.add_argument("--model", type=Path, required=True)
+    behavior_plan.add_argument("--workspace", type=Path, required=True)
+    behavior_plan.add_argument("--run-id", required=True)
+    behavior_plan.add_argument("--output", type=Path)
+
+    behavior_run = subparsers.add_parser("behavior-run")
+    behavior_run.add_argument("--contract", type=Path, required=True)
+
+    mtp_inspect = subparsers.add_parser("mtp-inspect")
+    mtp_inspect.add_argument("--model", type=Path, required=True)
+    mtp_inspect.add_argument("--run-id", default="mtp-inspect")
+
+    vision_smoke = subparsers.add_parser("vision-smoke")
+    vision_smoke.add_argument("--model", type=Path, required=True)
+    vision_smoke.add_argument("--image", type=Path, required=True)
+    vision_smoke.add_argument("--workspace", type=Path, required=True)
+    vision_smoke.add_argument("--run-id", required=True)
+    vision_smoke.add_argument("--prompt", default="Describe this image briefly and precisely.")
 
     cancel_status = subparsers.add_parser("cancel-status")
     cancel_status.add_argument("--run-dir", type=Path, required=True)
@@ -286,6 +332,251 @@ def command_cancel_status(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
+def command_stage(args: argparse.Namespace) -> int:
+    stage, qualification = stage_qualified_run(
+        run_dir=args.run_dir,
+        staging_root=args.staging_root,
+        stage_id=args.stage_id,
+    )
+    run_id = args.run_dir.expanduser().resolve().name
+    payload = {
+        "kind": "staged-candidate",
+        "relative_path": stage.name,
+        "staging_directory": str(stage),
+        "classification": qualification["classification"],
+        "qualified": qualification["qualified"],
+    }
+    if args.machine:
+        MachineWriter(run_id, sys.stdout).emit("artifact.discovered", "stage", payload)
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS
+
+
+def command_evidence(args: argparse.Namespace) -> int:
+    payload = qualified_run_evidence(run_dir=args.run_dir)
+    if args.machine:
+        MachineWriter(payload["run_id"], sys.stdout).emit(
+            "evaluation.recorded", "compare", payload
+        )
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS
+
+
+def command_sensitivity(args: argparse.Namespace) -> int:
+    from mlx_lm import load
+    from workflow_mixed_precision import (
+        MLXLayerAdapter,
+        MLXLogitsKLEvaluator,
+        build_sensitivity_request,
+    )
+    from workflow_sensitivity import analyze_sensitivity
+
+    with contextlib.redirect_stdout(sys.stderr):
+        model = args.model.expanduser().resolve()
+        workspace = args.workspace.expanduser().resolve()
+        _model, tokenizer = load(str(model), lazy=True)
+        prompts = ("A small local model should", "Return valid JSON with one key")
+        token_batches = tuple(tuple(tokenizer.encode(prompt)[:64]) for prompt in prompts)
+        if any(not batch for batch in token_batches):
+            raise WorkflowInputError("the tokenizer produced an empty calibration batch")
+        analysis_dir = workspace / ".analyses" / args.run_id
+        adapter = MLXLayerAdapter.inspect(model)
+        evaluator = MLXLogitsKLEvaluator(
+            model_path=model,
+            token_batches=token_batches,
+            evidence_dir=analysis_dir / "measurements",
+        )
+        request = build_sensitivity_request(
+            adapter=adapter,
+            model_path=model,
+            token_batches=token_batches,
+            max_search_states=max(1, 3 ** len(adapter.modules)),
+            max_metric_delta=args.max_kl,
+        )
+        result = analyze_sensitivity(request, evaluator)
+    document = {
+        "schema_version": 1,
+        "run_id": args.run_id,
+        "exact_parent": str(model),
+        "analysis": result.to_dict(),
+        "recommended_candidate_id": (
+            result.frontier[0].candidate_id if result.frontier else None
+        ),
+    }
+    output = args.output.expanduser().resolve() if args.output else analysis_dir / "sensitivity.json"
+    atomic_write_json(output, document)
+    payload = {**document, "analysis_path": str(output)}
+    if args.machine:
+        MachineWriter(args.run_id, sys.stdout).emit("evaluation.recorded", "sensitivity", payload)
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS if result.status == "supported" else EXIT_BLOCKED
+
+
+def command_materialize_mixed(args: argparse.Namespace) -> int:
+    from workflow_mixed_precision import MLXLayerAdapter, apply_assignment
+
+    document = read_object(args.analysis.expanduser().resolve())
+    if document.get("schema_version") != 1 or not isinstance(document.get("exact_parent"), str):
+        raise WorkflowInputError("mixed-precision analysis is invalid")
+    analysis = document.get("analysis")
+    candidates = analysis.get("candidates") if isinstance(analysis, dict) else None
+    if not isinstance(candidates, list):
+        raise WorkflowInputError("mixed-precision candidate evidence is missing")
+    selected = next(
+        (item for item in candidates if isinstance(item, dict) and item.get("candidate_id") == args.candidate_id),
+        None,
+    )
+    if selected is None or not isinstance(selected.get("assignments"), list):
+        raise WorkflowInputError("the selected mixed-precision candidate was not measured")
+    assignments = {}
+    for item in selected["assignments"]:
+        if not isinstance(item, list) or len(item) != 2 or not all(isinstance(value, str) for value in item):
+            raise WorkflowInputError("the selected assignment shape is invalid")
+        assignments[item[0]] = item[1]
+    parent = Path(document["exact_parent"]).resolve()
+    with contextlib.redirect_stdout(sys.stderr):
+        manifest = apply_assignment(
+            model_path=parent,
+            output_path=args.output,
+            adapter=MLXLayerAdapter.inspect(parent),
+            assignments=assignments,
+        )
+    payload = {
+        "kind": "mixed-precision-model",
+        "candidate_id": args.candidate_id,
+        "candidate": str(args.output.expanduser().resolve()),
+        "assignment_manifest": manifest,
+    }
+    if args.machine:
+        MachineWriter(args.run_id, sys.stdout).emit("artifact.discovered", "materialize-mixed", payload)
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS
+
+
+def command_behavior_plan(args: argparse.Namespace) -> int:
+    from inspect_mlx_model import inspect_model
+    from workflow_behavior import resolve_behavior_experiment, write_starter_behavior_recipe
+
+    workspace = args.workspace.expanduser().resolve()
+    capabilities = inspect_model(args.model)
+    inputs = workspace / ".behavior-inputs" / args.run_id
+    try:
+        recipe_path = write_starter_behavior_recipe(
+            capabilities=capabilities, destination=inputs
+        )
+        recipe = read_object(recipe_path)
+    except ValueError as exc:
+        payload = {
+            "schema_version": 1,
+            "run_id": args.run_id,
+            "exact_parent": str(args.model.expanduser().resolve()),
+            "blockers": [{"code": "behavior-adapter-required", "message": str(exc)}],
+            "steps": [],
+        }
+    else:
+        payload = resolve_behavior_experiment(
+            capabilities=capabilities, recipe=recipe, workspace=workspace, run_id=args.run_id
+        )
+        payload["recipe_path"] = str(recipe_path)
+    output = args.output.expanduser().resolve() if args.output else inputs / "contract.json"
+    atomic_write_json(output, payload)
+    event_type = "plan.blocked" if payload.get("blockers") else "plan.ready"
+    if args.machine:
+        MachineWriter(args.run_id, sys.stdout).emit(
+            event_type, "behavior-plan", {
+                **payload,
+                "state": "blocked" if payload.get("blockers") else "planned",
+                "contract_path": str(output),
+            }
+        )
+    else:
+        print(json.dumps({**payload, "contract_path": str(output)}, indent=2))
+    return EXIT_BLOCKED if payload.get("blockers") else EXIT_SUCCESS
+
+
+def command_mtp_inspect(args: argparse.Namespace) -> int:
+    executable = shutil.which("mtplx")
+    if executable is None:
+        for candidate in (
+            Path.home() / ".local/bin/mtplx",
+            Path("/opt/homebrew/bin/mtplx"),
+            Path("/usr/local/bin/mtplx"),
+        ):
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                executable = str(candidate)
+                break
+    if executable is None:
+        raise WorkflowInputError("MTPLX is not installed on this Mac")
+    completed = subprocess.run(
+        [executable, "inspect", "--model", str(args.model.expanduser().resolve()), "--require-mtp", "--json"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, timeout=60, check=False,
+    )
+    try:
+        report = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise WorkflowInputError(f"MTPLX did not return JSON: {completed.stderr.strip()}") from exc
+    compatibility = report.get("compatibility", {})
+    supported = compatibility.get("supported") is True and compatibility.get("can_run") is True
+    payload = {"supported": supported, "report": report}
+    if args.machine:
+        MachineWriter(args.run_id, sys.stdout).emit("capability.reported", "mtp-inspect", payload)
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS if supported else EXIT_BLOCKED
+
+
+def command_vision_smoke(args: argparse.Namespace) -> int:
+    from inspect_mlx_model import inspect_model
+
+    model = args.model.expanduser().resolve()
+    image = args.image.expanduser().resolve()
+    if not image.is_file():
+        raise WorkflowInputError(f"vision input is not a file: {image}")
+    capabilities = inspect_model(model)
+    if capabilities.get("capabilities", {}).get("vision") is not True:
+        payload = {
+            "state": "blocked", "supported": False,
+            "reason": "The inspected model does not advertise vision weights.",
+        }
+        if args.machine:
+            MachineWriter(args.run_id, sys.stdout).emit("plan.blocked", "vision-smoke", payload)
+        else:
+            print(json.dumps(payload, indent=2))
+        return EXIT_BLOCKED
+    evidence_dir = args.workspace.expanduser().resolve() / ".extension-checks" / args.run_id
+    evidence_dir.mkdir(parents=True, exist_ok=False)
+    completed = subprocess.run(
+        [
+            sys.executable, "-m", "mlx_vlm.generate", "--model", str(model),
+            "--image", str(image), "--prompt", args.prompt,
+            "--max-tokens", "64", "--no-verbose",
+        ],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, timeout=900, check=False,
+    )
+    (evidence_dir / "stdout.log").write_text(completed.stdout, encoding="utf-8")
+    (evidence_dir / "stderr.log").write_text(completed.stderr, encoding="utf-8")
+    if completed.returncode != 0:
+        payload = {"state": "failed", "supported": True, "exit_code": completed.returncode, "evidence_directory": str(evidence_dir)}
+        event_type = "stage.failed"
+    else:
+        payload = {
+            "state": "completed", "supported": True, "response": completed.stdout.strip(),
+            "image": str(image), "exact_parent": str(model), "evidence_directory": str(evidence_dir),
+        }
+        event_type = "evaluation.recorded"
+    if args.machine:
+        MachineWriter(args.run_id, sys.stdout).emit(event_type, "vision-smoke", payload)
+    else:
+        print(json.dumps(payload, indent=2))
+    return EXIT_SUCCESS if completed.returncode == 0 else EXIT_EXECUTION
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -318,6 +609,24 @@ def main() -> int:
             return resume_run(args.run_dir, sys.stdout)
         if args.command == "qualify":
             return qualify_run(args.run_dir, sys.stdout)
+        if args.command == "stage":
+            return command_stage(args)
+        if args.command == "evidence":
+            return command_evidence(args)
+        if args.command == "sensitivity":
+            return command_sensitivity(args)
+        if args.command == "materialize-mixed":
+            return command_materialize_mixed(args)
+        if args.command == "behavior-plan":
+            return command_behavior_plan(args)
+        if args.command == "behavior-run":
+            from workflow_behavior_executor import execute_behavior_contract
+
+            return execute_behavior_contract(read_object(args.contract), sys.stdout)
+        if args.command == "mtp-inspect":
+            return command_mtp_inspect(args)
+        if args.command == "vision-smoke":
+            return command_vision_smoke(args)
         if args.command == "cancel-status":
             return command_cancel_status(args)
     except (WorkflowInputError, ValueError) as exc:
@@ -326,6 +635,9 @@ def main() -> int:
     except ProtocolError as exc:
         print(f"protocol error: {exc}", file=sys.stderr)
         return EXIT_PROTOCOL
+    except PromotionError as exc:
+        print(f"blocked: {exc}", file=sys.stderr)
+        return EXIT_BLOCKED
     parser.error("unsupported command")
     return EXIT_INVALID
 

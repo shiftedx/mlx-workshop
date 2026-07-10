@@ -2,6 +2,8 @@ import SwiftUI
 
 struct BehaviorLabView: View {
   @EnvironmentObject private var store: WorkshopStore
+  let onPlan: @MainActor () async -> Void
+  let onRun: @MainActor () async -> Void
   @State private var editStrength = 1.0
   @State private var selectedLayers = 8
   @State private var preserveNorms = true
@@ -17,9 +19,22 @@ struct BehaviorLabView: View {
           Label("No behavior-editing evidence", systemImage: "waveform.path.ecg.rectangle")
         } description: {
           Text(
-            "Behavior editing appears only when inspection selects a validated architecture adapter and the workflow records separated discovery, tuning, benign-control, and held-out evidence."
+            store.currentRun?.stage == "behavior-plan"
+              ? (store.currentRun?.statusDetail
+                ?? "Review the behavior experiment eligibility evidence.")
+              : "This experimental workflow requires an inspected quantized Qwen3.5 model. It creates separated discovery, tuning, benign-control, and sealed held-out suites before any weight edit."
           )
         } actions: {
+          Button(
+            store.behaviorContractURL == nil
+              ? "Check model and prepare experiment" : "Run reviewed experiment"
+          ) {
+            Task {
+              if store.behaviorContractURL == nil { await onPlan() } else { await onRun() }
+            }
+          }
+          .disabled(
+            store.model == nil || store.runWorkspace == nil || store.behaviorExperimentRunning)
           Button("Inspect recipe") { store.showInspector = true }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

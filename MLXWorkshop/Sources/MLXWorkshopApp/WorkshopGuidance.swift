@@ -6,6 +6,7 @@ enum WorkshopGuideAction: Equatable {
   case reviewAndConfirm
   case cancel
   case verifyResult
+  case stageResult
   case resume
   case cancelRecovered
   case openSettings
@@ -79,13 +80,22 @@ struct WorkshopGuidance: Equatable {
         detail:
           "The copy was created. Now check that it loads, behaves deterministically, and still matches its original parent.",
         action: .verifyResult, actionTitle: "Verify result")
+    case .completed where run.stagedDirectory == nil:
+      return Self(
+        step: 5, isComplete: false,
+        title: "Your optimized copy is verified",
+        detail:
+          "All required checks passed. Prepare immutable release metadata so this exact result remains reproducible.",
+        action: .stageResult,
+        actionTitle: "Prepare local release")
     case .completed:
       return Self(
-        step: 4, isComplete: true,
-        title: "Your optimized copy is verified",
-        detail: "All required checks passed and the original model remained unchanged.",
-        action: run.runDirectory == nil ? .showEvidence : .showResult,
-        actionTitle: run.runDirectory == nil ? "View evidence" : "Show result in Finder")
+        step: 5, isComplete: true,
+        title: "Your local release is ready",
+        detail:
+          "The verified result now has immutable hashes, limitations, provenance, and rollback metadata.",
+        action: .showResult,
+        actionTitle: "Show release in Finder")
     case .interrupted where run.resumability == "safe":
       return Self(
         step: 3, isComplete: false,
@@ -121,6 +131,7 @@ struct WorkshopGuideView: View {
   @EnvironmentObject private var store: WorkshopStore
   @State private var actionInProgress = false
   let onQualify: @MainActor (String) async -> Void
+  let onStage: @MainActor (String) async -> Void
   let onResume: @MainActor (String) async -> Void
   let onCancelRecovered: @MainActor (String) async -> Void
 
@@ -135,7 +146,7 @@ struct WorkshopGuideView: View {
     HStack(spacing: WorkshopTheme.spaceM) {
       progress
       VStack(alignment: .leading, spacing: WorkshopTheme.spaceXXS) {
-        Text(guidance.isComplete ? "Complete" : "Step \(guidance.step) of 4")
+        Text(guidance.isComplete ? "Complete" : "Step \(guidance.step) of 5")
           .font(.system(size: 10.5, weight: .semibold))
           .foregroundStyle(guidance.isComplete ? WorkshopTheme.success : WorkshopTheme.skyBright)
         Text(guidance.title)
@@ -173,7 +184,7 @@ struct WorkshopGuideView: View {
 
   private var progress: some View {
     HStack(spacing: WorkshopTheme.spaceXXS) {
-      ForEach(1...4, id: \.self) { step in
+      ForEach(1...5, id: \.self) { step in
         Image(
           systemName: step < guidance.step || guidance.isComplete
             ? "checkmark.circle.fill" : "circle"
@@ -187,7 +198,7 @@ struct WorkshopGuideView: View {
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
-      guidance.isComplete ? "Workflow complete" : "Workflow step \(guidance.step) of 4")
+      guidance.isComplete ? "Workflow complete" : "Workflow step \(guidance.step) of 5")
   }
 
   private var actionSymbol: String {
@@ -195,6 +206,7 @@ struct WorkshopGuideView: View {
     case .reviewPlan, .reviewAndConfirm: "checklist"
     case .cancel, .cancelRecovered: "stop.fill"
     case .verifyResult: "checkmark.seal"
+    case .stageResult: "shippingbox"
     case .resume: "arrow.clockwise"
     case .openSettings: "slider.horizontal.3"
     case .showEvidence: "doc.text.magnifyingglass"
@@ -214,17 +226,18 @@ struct WorkshopGuideView: View {
     case .showEvidence:
       store.showRunDrawer = true
     case .showResult:
-      if let directory = store.currentRun?.runDirectory {
+      if let directory = store.currentRun?.stagedDirectory ?? store.currentRun?.runDirectory {
         NSWorkspace.shared.activateFileViewerSelecting([directory])
       } else {
         store.showRunDrawer = true
       }
-    case .verifyResult, .resume, .cancelRecovered:
+    case .verifyResult, .stageResult, .resume, .cancelRecovered:
       guard let runID = store.currentRun?.id else { return }
       actionInProgress = true
       Task { @MainActor in
         switch action {
         case .verifyResult: await onQualify(runID)
+        case .stageResult: await onStage(runID)
         case .resume: await onResume(runID)
         case .cancelRecovered: await onCancelRecovered(runID)
         default: break

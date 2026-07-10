@@ -49,8 +49,10 @@ drivers=(
   inspect_mlx_model.py
   mlx_workflow_cli.py
   workflow_behavior.py
+  workflow_behavior_executor.py
   workflow_executor.py
   workflow_host.py
+  workflow_mixed_precision.py
   workflow_plan.py
   workflow_promotion.py
   workflow_protocol.py

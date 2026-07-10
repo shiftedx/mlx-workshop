@@ -38,6 +38,15 @@ final class WorkshopStore: ObservableObject {
   @Published private(set) var hostSnapshot: HostSnapshot?
   @Published private(set) var planRequestSequence = 0
   @Published private(set) var planRequestPending = false
+  @Published private(set) var sensitivityPending = false
+  @Published private(set) var sensitivityAnalysisURL: URL?
+  @Published private(set) var sensitivityCandidateID: String?
+  @Published private(set) var behaviorContractURL: URL?
+  @Published private(set) var behaviorExperimentRunning = false
+  @Published private(set) var mtpCheckMessage: String?
+  @Published private(set) var visionCheckMessage: String?
+  @Published private(set) var extensionCheckPending = false
+  private var sensitivityCandidates: [SensitivityCandidateRecord] = []
 
   init(content: WorkshopContentMode = .live) {
     contentMode = content
@@ -62,7 +71,8 @@ final class WorkshopStore: ObservableObject {
 
   var selectedLayer: LayerRecord? { layers.first(where: { $0.id == selectedLayerID }) }
   var availableSections: [WorkshopSection] {
-    contentMode == .demo ? WorkshopSection.allCases : [.workbench, .runs, .host]
+    contentMode == .demo
+      ? WorkshopSection.allCases : [.workbench, .runs, .compare, .behavior, .extensions, .host]
   }
   var selectedCandidate: CandidateRecord? {
     candidates.first(where: { $0.id == selectedCandidateID })
@@ -167,13 +177,33 @@ final class WorkshopStore: ObservableObject {
       self.runs = runs
     case .candidates(let candidates):
       self.candidates = candidates
-      selectedCandidateID = candidates.first?.id
+      if !candidates.contains(where: { $0.id == selectedCandidateID }) {
+        selectedCandidateID =
+          candidates.first(where: { $0.status == .qualified })?.id
+          ?? candidates.first?.id
+      }
+    case .sensitivityMeasured(let projection):
+      layers = projection.layers
+      selectedLayerID = projection.layers.first?.id
+      sensitivityAnalysisURL = projection.analysisURL
+      sensitivityCandidateID = projection.recommendedCandidateID
+      sensitivityCandidates = projection.candidates
+      sensitivityPending = false
     case .behaviorEvidence(let evidence):
       behaviorCategories = evidence
     case .hostSnapshot(let snapshot):
       hostSnapshot = snapshot
     }
   }
+
+  func beginSensitivityAnalysis() { sensitivityPending = true }
+  func finishSensitivityAnalysis() { sensitivityPending = false }
+  func setBehaviorContract(_ url: URL?) { behaviorContractURL = url }
+  func setBehaviorExperimentRunning(_ running: Bool) { behaviorExperimentRunning = running }
+  func beginExtensionCheck() { extensionCheckPending = true }
+  func finishExtensionCheck() { extensionCheckPending = false }
+  func setMTPCheckMessage(_ message: String) { mtpCheckMessage = message }
+  func setVisionCheckMessage(_ message: String) { visionCheckMessage = message }
 
   func requestRunAction() {
     guard canStartRun else { return }
@@ -292,6 +322,7 @@ final class WorkshopStore: ObservableObject {
       return
     }
     layers[index].precision = precision
+    matchSensitivityCandidate()
   }
 
   func toggleProtection(for id: LayerRecord.ID) {
@@ -300,5 +331,39 @@ final class WorkshopStore: ObservableObject {
     }
     layers[index].isProtected.toggle()
     if layers[index].isProtected { layers[index].precision = .eight }
+    matchSensitivityCandidate()
+  }
+
+  private func matchSensitivityCandidate() {
+    guard !sensitivityCandidates.isEmpty else { return }
+    let assignments = Dictionary(uniqueKeysWithValues: layers.map { ($0.name, $0.precision) })
+    sensitivityCandidateID =
+      sensitivityCandidates.first(where: { $0.assignments == assignments })?.id
+  }
+
+  func markStaged(runID: String, directory: URL) {
+    if var run = currentRun, run.id == runID {
+      run.stagedDirectory = directory
+      run.statusDetail = "Local release metadata is ready"
+      currentRun = run
+    }
+    if let index = runs.firstIndex(where: { $0.runID == runID }) {
+      let run = runs[index]
+      runs[index] = RunRecord(
+        runID: run.runID,
+        number: run.number,
+        title: run.title,
+        created: run.created,
+        duration: run.duration,
+        state: run.state,
+        summary: "Run state: qualified and staged as an immutable local release record",
+        runDirectory: run.runDirectory,
+        stdoutLog: run.stdoutLog,
+        stderrLog: run.stderrLog,
+        command: run.command,
+        resumability: run.resumability,
+        isQualified: run.isQualified,
+        stagedDirectory: directory)
+    }
   }
 }

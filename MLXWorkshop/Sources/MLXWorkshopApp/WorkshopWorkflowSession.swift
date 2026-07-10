@@ -16,6 +16,9 @@ final class WorkshopWorkflowSession: ObservableObject {
   private var inspectedSelection: String?
   private var pendingPlans: [String: PendingPlan] = [:]
   private var activeRunHandles: [String: WorkflowCLIRunHandle] = [:]
+  #if DEBUG
+    private var uiTestFixtureMode = false
+  #endif
 
   private struct PendingPlan {
     let planURL: URL
@@ -49,14 +52,25 @@ final class WorkshopWorkflowSession: ObservableObject {
       workspaceURL: URL,
       into store: WorkshopStore
     ) async {
+      uiTestFixtureMode = true
       client = nil
       clientWorkspaceURL = nil
       inspectedSelection = nil
       store.selectRunWorkspace(workspaceURL)
       store.selectModelDirectory(modelURL)
-      await refreshHost(store)
-      await recoverWorkspaceRuns(store)
-      await inspectIfReady(store)
+      // UI automation validates interface wiring. Real inspection is exercised by
+      // WorkflowCLIClient integration tests; launching that subprocess through an
+      // ad-hoc XCTest app can block in macOS open(2) before Python starts.
+      store.apply(
+        .modelInspected(
+          LocalModelReference(
+            directory: modelURL, displayName: modelURL.lastPathComponent,
+            architecture: "llama", format: "safetensors", sizeBytes: 44 * 1_024,
+            parameterSummary: "dense", sourceState: "float-candidate",
+            supportSummary: "Conversion supported"),
+          layers: []))
+      inspectedSelection =
+        "\(modelURL.standardizedFileURL.path)|\(workspaceURL.standardizedFileURL.path)"
     }
   #endif
 
@@ -166,6 +180,12 @@ final class WorkshopWorkflowSession: ObservableObject {
 
   func planSelectedModel(_ store: WorkshopStore) async {
     defer { store.finishPlanRequest() }
+    #if DEBUG
+      if uiTestFixtureMode {
+        presentUITestPlan(store)
+        return
+      }
+    #endif
     guard let modelURL = store.model?.directory,
       let workspaceURL = store.runWorkspace
     else { return }
@@ -265,6 +285,18 @@ final class WorkshopWorkflowSession: ObservableObject {
   }
 
   func confirmPendingRun(_ store: WorkshopStore) async {
+    #if DEBUG
+      if uiTestFixtureMode, let confirmation = store.pendingConfirmation {
+        store.confirmationDidStart()
+        let run = WorkshopRun(
+          id: confirmation.runID, title: "MXFP4 quantization", state: .completed,
+          stage: "quantize-mxfp4", statusDetail: "Optimized copy created — verification required",
+          runDirectory: confirmation.runDirectory)
+        store.apply(.runChanged(run))
+        store.apply(.runHistory([uiTestRecord(run)]))
+        return
+      }
+    #endif
     guard let confirmation = store.pendingConfirmation,
       let pending = pendingPlans[confirmation.runID],
       pending.confirmation == confirmation,
@@ -333,6 +365,42 @@ final class WorkshopWorkflowSession: ObservableObject {
   }
 
   func qualifyRun(runID: String, into store: WorkshopStore) async {
+    #if DEBUG
+      if uiTestFixtureMode, var run = store.currentRun, run.id == runID {
+        run.isQualified = true
+        run.statusDetail = "Verified against the exact parent"
+        store.apply(.runChanged(run))
+        store.apply(.runHistory([uiTestRecord(run)]))
+        let parentURL = store.model?.directory
+        let evidenceRoot = run.runDirectory ?? store.runWorkspace ?? parentURL
+        let candidateURL = evidenceRoot?.appendingPathComponent(
+          "artifacts/model-mxfp4", isDirectory: true)
+        let evidence = [
+          QualificationGateRecord(
+            name: "Model reload", status: "passed",
+            evidence: ["The optimized copy reloaded successfully."]),
+          QualificationGateRecord(
+            name: "Exact parent", status: "passed",
+            evidence: ["The recorded parent fingerprint matches this model."]),
+          QualificationGateRecord(
+            name: "Output structure", status: "passed",
+            evidence: ["The optimized copy contains the required model files."]),
+        ]
+        store.apply(
+          .candidates([
+            CandidateRecord(
+              id: "ui-test-parent", name: "Original model", recipe: "Exact parent",
+              sizeGB: 0.00004, status: .parent, exactParent: parentURL,
+              candidateDirectory: parentURL, evidenceRoot: evidenceRoot),
+            CandidateRecord(
+              id: "ui-test-candidate", runID: run.id, name: "Optimized copy",
+              recipe: store.recipeName, sizeGB: 0.00002, status: .qualified,
+              exactParent: parentURL, candidateDirectory: candidateURL, gates: evidence,
+              evidenceRoot: evidenceRoot),
+          ]))
+        return
+      }
+    #endif
     guard let workspaceURL = store.runWorkspace else { return }
     do {
       let client = try workflowClient(workspaceURL: workspaceURL)
@@ -343,6 +411,196 @@ final class WorkshopWorkflowSession: ObservableObject {
       }
       let recovered = try await client.recoverRun(runID: runID)
       store.apply(recovered)
+      await recoverWorkspaceRuns(store)
+    } catch {
+      applyLifecycleFailure(error, runID: runID, into: store)
+    }
+  }
+
+  func analyzeSensitivity(_ store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace, let modelURL = store.model?.directory else {
+      return
+    }
+    store.beginSensitivityAnalysis()
+    defer { store.finishSensitivityAnalysis() }
+    do {
+      let client = try workflowClient(workspaceURL: workspaceURL)
+      let runID = "sensitivity-\(UUID().uuidString.lowercased())"
+      let execution = try await client.analyzeSensitivity(modelURL: modelURL, runID: runID)
+      guard execution.exitDisposition == .succeeded, execution.streamFailure == nil,
+        let event = execution.events.last(where: {
+          $0.kind == .known(.evaluationRecorded) && $0.stage == "sensitivity"
+        }), let projection = WorkflowSensitivityProjector().project(event)
+      else { return }
+      store.apply(.sensitivityMeasured(projection))
+      store.expertMode = true
+      store.showInspector = true
+    } catch {
+      store.finishSensitivityAnalysis()
+    }
+  }
+
+  func materializeMixedCandidate(_ store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace,
+      let analysisURL = store.sensitivityAnalysisURL,
+      let candidateID = store.sensitivityCandidateID
+    else { return }
+    let runID = "mixed-\(UUID().uuidString.lowercased())"
+    let output = workspaceURL.appendingPathComponent("mixed-candidates/\(runID)", isDirectory: true)
+    do {
+      let client = try workflowClient(workspaceURL: workspaceURL)
+      let execution = try await client.materializeMixed(
+        analysisURL: analysisURL, candidateID: candidateID, outputURL: output, runID: runID)
+      guard execution.exitDisposition == .succeeded, execution.streamFailure == nil else {
+        store.apply(execution)
+        return
+      }
+      store.apply(
+        .runChanged(
+          WorkshopRun(
+            id: runID, title: "Measured mixed-precision candidate", state: .completed,
+            stage: "materialize-mixed",
+            statusDetail: "Candidate created — verification is still required",
+            runDirectory: output, isQualified: false)))
+    } catch {
+      applyLifecycleFailure(error, runID: runID, into: store)
+    }
+  }
+
+  func planBehaviorExperiment(_ store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace, let modelURL = store.model?.directory else {
+      return
+    }
+    let runID = "behavior-\(UUID().uuidString.lowercased())"
+    do {
+      let execution = try await workflowClient(workspaceURL: workspaceURL)
+        .planBehavior(modelURL: modelURL, runID: runID)
+      store.apply(execution)
+      if execution.exitDisposition == .succeeded,
+        let event = execution.events.last(where: {
+          $0.kind == .known(.planReady) && $0.stage == "behavior-plan"
+        }), let path = event.payload["contract_path"]?.stringValue
+      {
+        store.setBehaviorContract(URL(fileURLWithPath: path))
+      } else {
+        store.setBehaviorContract(nil)
+      }
+    } catch {
+      applyLifecycleFailure(error, runID: runID, into: store)
+    }
+  }
+
+  func runBehaviorExperiment(_ store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace, let contractURL = store.behaviorContractURL else {
+      return
+    }
+    store.setBehaviorExperimentRunning(true)
+    defer { store.setBehaviorExperimentRunning(false) }
+    do {
+      let execution = try await workflowClient(workspaceURL: workspaceURL)
+        .runBehavior(contractURL: contractURL)
+      store.apply(execution)
+      guard
+        let event = execution.events.last(where: {
+          $0.kind == .known(.evaluationRecorded) && $0.stage == "behavior-held-out"
+        }), case .array(let values) = event.payload["categories"]
+      else { return }
+      let categories = values.compactMap { value -> BehaviorCategory? in
+        guard case .object(let item) = value,
+          let name = item["name"]?.stringValue,
+          case .number(let parent) = item["parent_rate"],
+          case .number(let candidate) = item["candidate_rate"],
+          case .number(let count) = item["sample_count"]
+        else { return nil }
+        return BehaviorCategory(
+          name: name, parentRate: parent, candidateRate: candidate,
+          sampleCount: Int(count))
+      }
+      store.apply(.behaviorEvidence(categories))
+    } catch {
+      store.setBehaviorExperimentRunning(false)
+    }
+  }
+
+  func inspectMTPExtension(_ store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace, let modelURL = store.model?.directory else {
+      return
+    }
+    store.beginExtensionCheck()
+    defer { store.finishExtensionCheck() }
+    do {
+      let execution = try await workflowClient(workspaceURL: workspaceURL).inspectMTP(
+        modelURL: modelURL, runID: "mtp-\(UUID().uuidString.lowercased())")
+      guard
+        let event = execution.events.last(where: {
+          $0.kind == .known(.capabilityReported) && $0.stage == "mtp-inspect"
+        }), case .object(let report) = event.payload["report"],
+        case .object(let compatibility) = report["compatibility"]
+      else { return }
+      let supported = event.payload["supported"] == .bool(true)
+      let message =
+        compatibility["message"]?.stringValue
+        ?? (supported ? "MTPLX reports this model can run." : "MTPLX did not approve this model.")
+      store.setMTPCheckMessage(message)
+    } catch {
+      store.setMTPCheckMessage(error.localizedDescription)
+    }
+  }
+
+  func runVisionSmoke(imageURL: URL, store: WorkshopStore) async {
+    guard let workspaceURL = store.runWorkspace, let modelURL = store.model?.directory else {
+      return
+    }
+    store.beginExtensionCheck()
+    defer { store.finishExtensionCheck() }
+    do {
+      let execution = try await workflowClient(workspaceURL: workspaceURL).visionSmoke(
+        modelURL: modelURL, imageURL: imageURL,
+        runID: "vision-\(UUID().uuidString.lowercased())")
+      if let event = execution.events.last(where: { $0.stage == "vision-smoke" }) {
+        store.setVisionCheckMessage(
+          event.payload["response"]?.stringValue
+            ?? event.payload["reason"]?.stringValue
+            ?? "Vision check finished with \(event.payload["state"]?.stringValue ?? "unknown") state."
+        )
+      }
+    } catch {
+      store.setVisionCheckMessage(error.localizedDescription)
+    }
+  }
+
+  func stageRun(runID: String, into store: WorkshopStore) async {
+    #if DEBUG
+      if uiTestFixtureMode, let workspace = store.runWorkspace {
+        let directory = workspace.appendingPathComponent("staged-candidates/\(runID)")
+        store.markStaged(runID: runID, directory: directory)
+        return
+      }
+    #endif
+    guard let workspaceURL = store.runWorkspace else { return }
+    do {
+      let client = try workflowClient(workspaceURL: workspaceURL)
+      let stagingRoot = workspaceURL.appendingPathComponent("staged-candidates", isDirectory: true)
+      try FileManager.default.createDirectory(
+        at: stagingRoot, withIntermediateDirectories: true)
+      let execution = try await client.stageRun(
+        runID: runID, stagingRoot: stagingRoot, stageID: runID)
+      guard execution.exitDisposition == .succeeded,
+        execution.streamFailure == nil,
+        let event = execution.events.last(where: {
+          $0.kind == .known(.artifactDiscovered)
+            && $0.payload["kind"] == .string("staged-candidate")
+        }),
+        let path = event.payload["staging_directory"]?.stringValue
+      else {
+        applyLifecycleFailure(
+          WorkflowCLIClientError.missingRuntimeFile(
+            "The staging command did not return a verified destination."),
+          runID: runID,
+          into: store)
+        return
+      }
+      store.markStaged(runID: runID, directory: URL(fileURLWithPath: path, isDirectory: true))
       await recoverWorkspaceRuns(store)
     } catch {
       applyLifecycleFailure(error, runID: runID, into: store)
@@ -402,6 +660,17 @@ final class WorkshopWorkflowSession: ObservableObject {
   }
 
   func refreshHost(_ store: WorkshopStore) async {
+    #if DEBUG
+      if uiTestFixtureMode {
+        store.apply(
+          .hostSnapshot(
+            HostSnapshot(
+              chip: "Apple Silicon", unifiedMemory: "64 GiB", availableMemory: "Measured",
+              freeDisk: "Measured", operatingSystem: "macOS", mlxVersion: "0.31.2",
+              mlxLMVersion: "0.31.3", activeWorkloads: [])))
+        return
+      }
+    #endif
     guard let workspaceURL = store.runWorkspace else { return }
     do {
       let client = try workflowClient(workspaceURL: workspaceURL)
@@ -424,11 +693,31 @@ final class WorkshopWorkflowSession: ObservableObject {
     do {
       let client = try workflowClient(workspaceURL: workspaceURL)
       let batch = try await client.recoverAllRuns()
-      store.apply(.runHistory(WorkflowPresentationAdapter().history(from: batch)))
+      let history = WorkflowPresentationAdapter().history(from: batch)
+      store.apply(.runHistory(history))
+      var candidates: [CandidateRecord] = []
+      for run in history where run.state == .completed && run.isQualified {
+        do {
+          let execution = try await client.evidence(runID: run.runID)
+          guard execution.exitDisposition == .succeeded,
+            execution.streamFailure == nil,
+            let event = execution.events.last(where: {
+              $0.kind == .known(.evaluationRecorded) && $0.stage == "compare"
+            }),
+            let projected = WorkflowEvidenceProjector().project(event)
+          else { continue }
+          candidates.append(contentsOf: projected)
+        } catch {
+          // A run without revalidated comparison evidence remains in Runs, but is
+          // intentionally omitted from Compare rather than receiving inferred facts.
+        }
+      }
+      store.apply(.candidates(candidates))
     } catch {
       // Recovery is isolated from model inspection. A workspace-level enumeration
       // failure leaves history empty instead of inventing run state.
       store.apply(.runHistory([]))
+      store.apply(.candidates([]))
     }
   }
 
@@ -441,6 +730,50 @@ final class WorkshopWorkflowSession: ObservableObject {
     clientWorkspaceURL = normalized
     return newClient
   }
+
+  #if DEBUG
+    private func presentUITestPlan(_ store: WorkshopStore) {
+      guard let model = store.model?.directory, let workspace = store.runWorkspace else { return }
+      let runID = "ui-run-\(UUID().uuidString.lowercased())"
+      let runDirectory = workspace.appendingPathComponent(runID, isDirectory: true)
+      let disclosure = PlanDisclosure(
+        runDirectory: runDirectory.path, exactParent: model.path, quantModes: ["mxfp4"],
+        evidenceKind: "deterministic-ui-fixture", uncertainty: "UI automation fixture",
+        estimatedOutputBytes: 20_000, estimatedTemporaryBytes: 44_000,
+        requiredFreeDiskBytes: 1_000_000, observedFreeDiskBytes: 10_000_000,
+        estimatedPeakMemoryBytes: 1_000_000, observedUnifiedMemoryBytes: 64_000_000_000,
+        estimatedDurationSeconds: 1, timeBudgetSeconds: 3_600,
+        feasibility: "pass", reasonCodes: [],
+        requiredGates: ["provenance-structure", "deterministic-language-schema", "parent-parity"],
+        blockers: [])
+      let command = CommandDisclosure(
+        executableIdentity: "/bundled/python", arguments: ["mlx_lm", "convert"],
+        redactedDisplay: "mlx_lm convert <model> <workspace>")
+      let confirmation = RunConfirmation(
+        runID: runID, plan: disclosure, command: command, changesWeights: true)
+      store.apply(
+        .runChanged(
+          WorkshopRun(
+            id: runID, title: "MXFP4 quantization plan", state: .planned,
+            statusDetail: "Plan ready", runDirectory: runDirectory)))
+      store.attachPlanDetails(disclosure, command: command, runID: runID)
+      store.presentConfirmation(confirmation)
+    }
+
+    private func uiTestRecord(_ run: WorkshopRun) -> RunRecord {
+      RunRecord(
+        runID: run.id, number: 1, title: run.title, created: "Now", duration: "1s",
+        state: run.state,
+        summary: run.isQualified
+          ? (run.stagedDirectory == nil
+            ? "Run state: qualified"
+            : "Run state: qualified and staged as an immutable local release record")
+          : "Run state: completed; verification required",
+        runDirectory: run.runDirectory, stdoutLog: run.stdoutLog, stderrLog: run.stderrLog,
+        command: run.command, resumability: run.resumability, isQualified: run.isQualified,
+        stagedDirectory: run.stagedDirectory)
+    }
+  #endif
 
   private func applyLifecycleFailure(_ error: Error, runID: String, into store: WorkshopStore) {
     var run =

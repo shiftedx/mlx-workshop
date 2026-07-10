@@ -6,6 +6,7 @@ enum WorkshopSection: String, CaseIterable, Identifiable {
   case runs = "Runs"
   case compare = "Compare"
   case behavior = "Behavior Lab"
+  case extensions = "Extensions"
   case host = "Host"
 
   var id: String { rawValue }
@@ -16,6 +17,7 @@ enum WorkshopSection: String, CaseIterable, Identifiable {
     case .runs: "clock.arrow.trianglehead.counterclockwise.rotate.90"
     case .compare: "arrow.left.arrow.right"
     case .behavior: "waveform.path.ecg.rectangle"
+    case .extensions: "puzzlepiece.extension"
     case .host: "macstudio"
     }
   }
@@ -67,6 +69,8 @@ struct LocalModelReference: Equatable {
   var sourceState: String?
   var supportSummary: String?
   var warnings: [WorkshopDiagnostic] = []
+  var visionAdvertised = false
+  var mtpAdvertised = false
 
   var detailLine: String {
     [architecture, parameterSummary, sourceState].compactMap { $0 }.joined(separator: " · ")
@@ -281,16 +285,60 @@ struct LayerRecord: Equatable, Identifiable {
   var isProtected: Bool
 }
 
+struct QualificationGateRecord: Equatable, Identifiable {
+  var id: String { name }
+  let name: String
+  let status: String
+  let evidence: [String]
+}
+
 struct CandidateRecord: Equatable, Identifiable {
-  let id = UUID()
+  let id: String
+  let runID: String?
   let name: String
   let recipe: String
-  let sizeGB: Double
-  let throughput: Double
-  let kl: Double
-  let score: Int
-  let criticalRegressions: Int
+  let sizeGB: Double?
+  let throughput: Double?
+  let kl: Double?
+  let score: Int?
+  let criticalRegressions: Int?
   let status: CandidateStatus
+  let exactParent: URL?
+  let candidateDirectory: URL?
+  let gates: [QualificationGateRecord]
+  let evidenceRoot: URL?
+
+  init(
+    id: String = UUID().uuidString,
+    runID: String? = nil,
+    name: String,
+    recipe: String,
+    sizeGB: Double? = nil,
+    throughput: Double? = nil,
+    kl: Double? = nil,
+    score: Int? = nil,
+    criticalRegressions: Int? = nil,
+    status: CandidateStatus,
+    exactParent: URL? = nil,
+    candidateDirectory: URL? = nil,
+    gates: [QualificationGateRecord] = [],
+    evidenceRoot: URL? = nil
+  ) {
+    self.id = id
+    self.runID = runID
+    self.name = name
+    self.recipe = recipe
+    self.sizeGB = sizeGB
+    self.throughput = throughput
+    self.kl = kl
+    self.score = score
+    self.criticalRegressions = criticalRegressions
+    self.status = status
+    self.exactParent = exactParent
+    self.candidateDirectory = candidateDirectory
+    self.gates = gates
+    self.evidenceRoot = evidenceRoot
+  }
 }
 
 enum CandidateStatus: String, Equatable {
@@ -385,10 +433,12 @@ struct WorkshopRun: Equatable, Identifiable {
   var plan: PlanDisclosure?
   var diagnostics: [WorkshopDiagnostic] = []
   var isQualified = false
+  var stagedDirectory: URL?
 }
 
 enum RunLifecycleAction: Equatable {
   case qualify
+  case stage
   case resume
   case cancelRecovered
 
@@ -396,11 +446,14 @@ enum RunLifecycleAction: Equatable {
     state: WorkshopRunState,
     resumability: String?,
     isQualified: Bool,
-    isTrackedByThisProcess: Bool
+    isTrackedByThisProcess: Bool,
+    isStaged: Bool = false
   ) -> Self? {
     switch state {
     case .completed where !isQualified:
       return .qualify
+    case .completed where isQualified && !isStaged:
+      return .stage
     case .interrupted where resumability == "safe":
       return .resume
     case .running where !isTrackedByThisProcess:
@@ -435,6 +488,7 @@ struct RunRecord: Equatable, Identifiable {
   let command: CommandDisclosure?
   let resumability: String?
   let isQualified: Bool
+  let stagedDirectory: URL?
 
   init(
     runID: String,
@@ -449,7 +503,8 @@ struct RunRecord: Equatable, Identifiable {
     stderrLog: URL? = nil,
     command: CommandDisclosure? = nil,
     resumability: String? = nil,
-    isQualified: Bool = false
+    isQualified: Bool = false,
+    stagedDirectory: URL? = nil
   ) {
     self.runID = runID
     self.number = number
@@ -464,6 +519,7 @@ struct RunRecord: Equatable, Identifiable {
     self.command = command
     self.resumability = resumability
     self.isQualified = isQualified
+    self.stagedDirectory = stagedDirectory
   }
 }
 
@@ -483,6 +539,7 @@ enum WorkshopSessionUpdate: Equatable {
   case runChanged(WorkshopRun)
   case runHistory([RunRecord])
   case candidates([CandidateRecord])
+  case sensitivityMeasured(SensitivityProjection)
   case behaviorEvidence([BehaviorCategory])
   case hostSnapshot(HostSnapshot)
 }

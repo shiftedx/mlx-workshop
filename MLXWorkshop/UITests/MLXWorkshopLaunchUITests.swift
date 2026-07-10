@@ -33,7 +33,12 @@ final class MLXWorkshopLaunchUITests: XCTestCase {
 
     XCTAssertTrue(app.staticTexts["Create an optimized copy"].waitForExistence(timeout: 45))
     XCTAssertFalse(app.staticTexts["Demo data"].exists)
-    XCTAssertFalse(app.staticTexts["Compare"].exists)
+    XCTAssertTrue(app.staticTexts["Compare"].exists)
+    XCTAssertTrue(app.staticTexts["Behavior Lab"].exists)
+    XCTAssertTrue(app.staticTexts["Extensions"].exists)
+
+    let analyze = app.buttons["Analyze sensitivity"]
+    XCTAssertTrue(analyze.waitForExistence(timeout: 10))
 
     let primaryAction = app.buttons["workflow.primaryAction"]
     XCTAssertTrue(primaryAction.waitForExistence(timeout: 10))
@@ -55,14 +60,35 @@ final class MLXWorkshopLaunchUITests: XCTestCase {
     XCTAssertEqual(XCTWaiter.wait(for: [verificationReady], timeout: 45), .completed)
     verifyResult.click()
     let verificationComplete = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label == %@", "Show result in Finder"),
+      predicate: NSPredicate(format: "label == %@", "Prepare local release"),
       object: verifyResult)
     XCTAssertEqual(XCTWaiter.wait(for: [verificationComplete], timeout: 45), .completed)
+    verifyResult.click()
+    let stagingComplete = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "label == %@", "Show release in Finder"),
+      object: verifyResult)
+    XCTAssertEqual(XCTWaiter.wait(for: [stagingComplete], timeout: 45), .completed)
 
     app.staticTexts["Runs"].firstMatch.click()
     XCTAssertTrue(app.staticTexts["Run history"].waitForExistence(timeout: 10))
     XCTAssertTrue(
-      app.staticTexts["Run state: qualified; all required gates passed"].firstMatch.exists)
+      app.staticTexts[
+        "Run state: qualified and staged as an immutable local release record"
+      ].firstMatch.exists)
+
+    app.staticTexts["Compare"].firstMatch.click()
+    XCTAssertTrue(app.staticTexts["Verified comparison"].waitForExistence(timeout: 20))
+    XCTAssertTrue(app.staticTexts["Qualification gates"].exists)
+    XCTAssertTrue(app.staticTexts["Not measured"].firstMatch.exists)
+
+    app.staticTexts["Behavior Lab"].firstMatch.click()
+    XCTAssertTrue(app.staticTexts["No behavior-editing evidence"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["Check model and prepare experiment"].exists)
+
+    app.staticTexts["Extensions"].firstMatch.click()
+    XCTAssertTrue(app.staticTexts["Model extensions"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["Choose image and test"].exists)
+    XCTAssertTrue(app.buttons["Check MTPLX compatibility"].exists)
 
     app.staticTexts["Host"].firstMatch.click()
     XCTAssertTrue(app.staticTexts["This Mac"].waitForExistence(timeout: 10))

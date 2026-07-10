@@ -14,6 +14,7 @@ struct WorkflowCapabilityProjector {
     let identity = event.payload["identity"]?.objectValue ?? [:]
     let source = event.payload["source"]?.objectValue ?? [:]
     let routing = event.payload["routing"]?.objectValue ?? [:]
+    let capabilities = event.payload["capabilities"]?.objectValue ?? [:]
     let conversion = routing["conversion"]?.objectValue ?? [:]
     let route = conversion["default"]?.stringValue
     let conversionAllowed = conversion["allowed"]?.boolValue
@@ -76,6 +77,9 @@ struct WorkflowCapabilityProjector {
     }
     var projectedModel = model
     projectedModel.warnings = warningDiagnostics
+    projectedModel.visionAdvertised = capabilities["vision"]?.boolValue == true
+    let mtpLayers = capabilities["mtp_layers_advertised"]?.int64Value ?? 0
+    projectedModel.mtpAdvertised = capabilities["mtp_sidecar"]?.boolValue == true || mtpLayers > 0
     return WorkflowCapabilityProjection(model: projectedModel, blocker: blocker)
   }
 }

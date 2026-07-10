@@ -10,7 +10,9 @@ final class WorkshopDomainTests: XCTestCase {
     let live = WorkshopStore(content: .live)
     let demo = WorkshopStore(content: .demo)
 
-    XCTAssertEqual(live.availableSections, [.workbench, .runs, .host])
+    XCTAssertEqual(
+      live.availableSections,
+      [.workbench, .runs, .compare, .behavior, .extensions, .host])
     XCTAssertEqual(demo.availableSections, WorkshopSection.allCases)
   }
 
@@ -247,10 +249,11 @@ final class WorkshopDomainTests: XCTestCase {
       RunLifecycleAction.recommended(
         state: .running, resumability: "unknown", isQualified: false,
         isTrackedByThisProcess: true))
-    XCTAssertNil(
+    XCTAssertEqual(
       RunLifecycleAction.recommended(
         state: .completed, resumability: "not-applicable", isQualified: true,
-        isTrackedByThisProcess: false))
+        isTrackedByThisProcess: false),
+      .stage)
     XCTAssertNil(
       RunLifecycleAction.recommended(
         state: .protocolMismatch, resumability: nil, isQualified: false,
