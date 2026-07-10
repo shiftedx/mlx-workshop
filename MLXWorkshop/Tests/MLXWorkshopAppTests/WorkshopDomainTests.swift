@@ -23,6 +23,28 @@ final class WorkshopDomainTests: XCTestCase {
         NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError)))
   }
 
+  func testModelFolderPickerExplainsWhatFolderQualifies() {
+    let configuration = WorkshopFolderPickerConfiguration.forTarget(.model)
+
+    XCTAssertEqual(configuration.title, "Choose a model folder")
+    XCTAssertEqual(configuration.prompt, "Choose Model")
+    XCTAssertTrue(configuration.message.contains("config.json"))
+    XCTAssertTrue(configuration.message.contains(".safetensors"))
+    XCTAssertTrue(configuration.canChooseDirectories)
+    XCTAssertFalse(configuration.canChooseFiles)
+  }
+
+  func testWorkspaceFolderPickerExplainsWhereRunsWillBeWritten() {
+    let configuration = WorkshopFolderPickerConfiguration.forTarget(.workspace)
+
+    XCTAssertEqual(configuration.title, "Choose a run workspace")
+    XCTAssertEqual(configuration.prompt, "Choose Workspace")
+    XCTAssertTrue(configuration.message.contains("writable folder"))
+    XCTAssertTrue(configuration.message.contains("model folder"))
+    XCTAssertTrue(configuration.canChooseDirectories)
+    XCTAssertFalse(configuration.canChooseFiles)
+  }
+
   func testProductionSessionStartsWithoutClaimingModelReadinessOrRunEvidence() {
     let store = WorkshopStore()
 

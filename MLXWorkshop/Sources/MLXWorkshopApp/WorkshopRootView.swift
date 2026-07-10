@@ -1,23 +1,8 @@
 import SwiftUI
-import UniformTypeIdentifiers
-
-enum WorkshopFileImport {
-  enum Target: Equatable {
-    case model
-    case workspace
-  }
-
-  static func isCancellation(_ error: Error) -> Bool {
-    let cocoa = error as NSError
-    return cocoa.domain == NSCocoaErrorDomain && cocoa.code == NSUserCancelledError
-  }
-}
 
 struct WorkshopRootView: View {
   @EnvironmentObject private var store: WorkshopStore
   @State private var columnVisibility: NavigationSplitViewVisibility = .all
-  @State private var selectingFolder = false
-  @State private var folderTarget: WorkshopFileImport.Target?
   @StateObject private var workflowSession = WorkshopWorkflowSession()
 
   var body: some View {
@@ -39,10 +24,6 @@ struct WorkshopRootView: View {
         workspace
       }
     }
-    .fileImporter(
-      isPresented: $selectingFolder, allowedContentTypes: [.folder],
-      allowsMultipleSelection: false, onCompletion: handleFolderSelection
-    )
     .task {
       guard !CommandLine.arguments.contains(where: { $0.hasPrefix("--snapshot-live=") }) else {
         return
@@ -96,7 +77,7 @@ struct WorkshopRootView: View {
     .toolbar {
       ToolbarItemGroup(placement: .navigation) {
         Button(action: chooseModel) {
-          Label("Choose model", systemImage: "folder.badge.plus")
+          Label("Choose model folder", systemImage: "folder.badge.plus")
         }
         .keyboardShortcut("o", modifiers: [.command])
         .disabled(!store.canChangeSelection)
@@ -186,7 +167,8 @@ struct WorkshopRootView: View {
       HStack(spacing: 12) {
         Button(action: chooseModel) {
           Label(
-            store.model == nil ? "Choose model…" : "Choose another model…", systemImage: "folder")
+            store.model == nil ? "Choose model folder…" : "Choose another model folder…",
+            systemImage: "folder")
         }
         .buttonStyle(PrimaryActionButtonStyle())
         .accessibilityIdentifier("setup.chooseModel")
@@ -203,7 +185,8 @@ struct WorkshopRootView: View {
       }
 
       VStack(alignment: .leading, spacing: 7) {
-        setupFact("Model", store.model?.directory.path(percentEncoded: false) ?? "Not selected")
+        setupFact(
+          "Model folder", store.model?.directory.path(percentEncoded: false) ?? "Not selected")
         setupFact(
           "Run workspace", store.runWorkspace?.path(percentEncoded: false) ?? "Not selected")
       }
@@ -261,7 +244,7 @@ struct WorkshopRootView: View {
           .buttonStyle(PrimaryActionButtonStyle())
           .frame(width: 220)
       }
-      Button("Choose a different model…", action: chooseModel)
+      Button("Choose a different model folder…", action: chooseModel)
         .buttonStyle(QuietButtonStyle())
     }
     .padding(32)
@@ -295,14 +278,12 @@ struct WorkshopRootView: View {
 
   private func chooseModel() {
     store.beginModelSelection()
-    folderTarget = .model
-    selectingFolder = true
+    WorkshopFolderPicker.present(target: .model, onCompletion: handleModelSelection)
   }
 
   private func chooseWorkspace() {
     store.beginWorkspaceSelection()
-    folderTarget = .workspace
-    selectingFolder = true
+    WorkshopFolderPicker.present(target: .workspace, onCompletion: handleWorkspaceSelection)
   }
 
   private func perform(_ action: WorkshopDiagnostic.RecoveryAction) {
@@ -310,17 +291,6 @@ struct WorkshopRootView: View {
     case .chooseModel, .retryInspection: chooseModel()
     case .chooseWorkspace: chooseWorkspace()
     case .revealRun, .openLog: break
-    }
-  }
-
-  private func handleFolderSelection(_ result: Result<[URL], Error>) {
-    guard let target = folderTarget else { return }
-    folderTarget = nil
-    switch target {
-    case .model:
-      handleModelSelection(result)
-    case .workspace:
-      handleWorkspaceSelection(result)
     }
   }
 
