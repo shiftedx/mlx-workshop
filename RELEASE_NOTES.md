@@ -16,7 +16,7 @@ Verification evidence:
 - 56 Python unit/integration tests
 - 91 Swift unit/integration tests
 - Real tiny-model conversion with source immutability and three hashed qualification gates
-- 7,339-file bundled-runtime manifest and import/host smoke test
+- 7,340-file bundled-runtime manifest and import/host smoke test
 - arm64 Release bundle, sandbox/privacy checks, and verified drag-to-Applications DMG
 
 Completion is not qualification. The app keeps those states visually and
