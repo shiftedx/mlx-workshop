@@ -9,21 +9,44 @@ enum SecurityScopedAccessMode: String, Codable, Sendable {
   case readWrite
 }
 
+struct SecurityScopedResourceOperations: @unchecked Sendable {
+  let startAccessing: (URL) -> Bool
+  let stopAccessing: (URL) -> Void
+  let createBookmark: (URL, URL.BookmarkCreationOptions) throws -> Data
+
+  static let system = SecurityScopedResourceOperations(
+    startAccessing: { $0.startAccessingSecurityScopedResource() },
+    stopAccessing: { $0.stopAccessingSecurityScopedResource() },
+    createBookmark: { url, options in
+      try url.bookmarkData(
+        options: options,
+        includingResourceValuesForKeys: nil,
+        relativeTo: nil
+      )
+    })
+}
+
 struct SecurityScopedPath: Codable, Equatable, Sendable {
   let bookmarkData: Data
   let displayPath: String
   let accessMode: SecurityScopedAccessMode
 
-  init(url: URL, accessMode: SecurityScopedAccessMode) throws {
+  init(
+    url: URL,
+    accessMode: SecurityScopedAccessMode,
+    operations: SecurityScopedResourceOperations = .system
+  ) throws {
+    let didStartAccess = operations.startAccessing(url)
+    defer {
+      if didStartAccess {
+        operations.stopAccessing(url)
+      }
+    }
     var options: URL.BookmarkCreationOptions = [.withSecurityScope]
     if accessMode == .readOnly {
       options.insert(.securityScopeAllowOnlyReadAccess)
     }
-    bookmarkData = try url.bookmarkData(
-      options: options,
-      includingResourceValuesForKeys: nil,
-      relativeTo: nil
-    )
+    bookmarkData = try operations.createBookmark(url, options)
     displayPath = url.path
     self.accessMode = accessMode
   }

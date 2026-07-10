@@ -2,6 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum WorkshopFileImport {
+  enum Target: Equatable {
+    case model
+    case workspace
+  }
+
   static func isCancellation(_ error: Error) -> Bool {
     let cocoa = error as NSError
     return cocoa.domain == NSCocoaErrorDomain && cocoa.code == NSUserCancelledError
@@ -11,8 +16,8 @@ enum WorkshopFileImport {
 struct WorkshopRootView: View {
   @EnvironmentObject private var store: WorkshopStore
   @State private var columnVisibility: NavigationSplitViewVisibility = .all
-  @State private var selectingModel = false
-  @State private var selectingWorkspace = false
+  @State private var selectingFolder = false
+  @State private var folderTarget: WorkshopFileImport.Target?
   @StateObject private var workflowSession = WorkshopWorkflowSession()
 
   var body: some View {
@@ -35,12 +40,8 @@ struct WorkshopRootView: View {
       }
     }
     .fileImporter(
-      isPresented: $selectingModel, allowedContentTypes: [.folder],
-      allowsMultipleSelection: false, onCompletion: handleModelSelection
-    )
-    .fileImporter(
-      isPresented: $selectingWorkspace, allowedContentTypes: [.folder],
-      allowsMultipleSelection: false, onCompletion: handleWorkspaceSelection
+      isPresented: $selectingFolder, allowedContentTypes: [.folder],
+      allowsMultipleSelection: false, onCompletion: handleFolderSelection
     )
     .task {
       guard !CommandLine.arguments.contains(where: { $0.hasPrefix("--snapshot-live=") }) else {
@@ -294,12 +295,14 @@ struct WorkshopRootView: View {
 
   private func chooseModel() {
     store.beginModelSelection()
-    selectingModel = true
+    folderTarget = .model
+    selectingFolder = true
   }
 
   private func chooseWorkspace() {
     store.beginWorkspaceSelection()
-    selectingWorkspace = true
+    folderTarget = .workspace
+    selectingFolder = true
   }
 
   private func perform(_ action: WorkshopDiagnostic.RecoveryAction) {
@@ -310,6 +313,17 @@ struct WorkshopRootView: View {
     }
   }
 
+  private func handleFolderSelection(_ result: Result<[URL], Error>) {
+    guard let target = folderTarget else { return }
+    folderTarget = nil
+    switch target {
+    case .model:
+      handleModelSelection(result)
+    case .workspace:
+      handleWorkspaceSelection(result)
+    }
+  }
+
   private func handleModelSelection(_ result: Result<[URL], Error>) {
     switch result {
     case .success(let urls):
@@ -317,7 +331,12 @@ struct WorkshopRootView: View {
         store.cancelModelSelection()
         return
       }
-      Task { await workflowSession.selectModel(url, into: store) }
+      do {
+        let path = try SecurityScopedPath(url: url, accessMode: .readOnly)
+        Task { await workflowSession.selectModel(path, into: store) }
+      } catch {
+        store.selectionFailed(.selectingModel, message: error.localizedDescription)
+      }
     case .failure(let error):
       if WorkshopFileImport.isCancellation(error) {
         store.cancelModelSelection()
@@ -334,7 +353,12 @@ struct WorkshopRootView: View {
         store.cancelWorkspaceSelection()
         return
       }
-      Task { await workflowSession.selectWorkspace(url, into: store) }
+      do {
+        let path = try SecurityScopedPath(url: url, accessMode: .readWrite)
+        Task { await workflowSession.selectWorkspace(path, into: store) }
+      } catch {
+        store.selectionFailed(.selectingWorkspace, message: error.localizedDescription)
+      }
     case .failure(let error):
       if WorkshopFileImport.isCancellation(error) {
         store.cancelWorkspaceSelection()

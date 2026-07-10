@@ -115,6 +115,37 @@ final class RunRepositoryTests: XCTestCase {
     XCTAssertEqual(access.url.lastPathComponent, directory.lastPathComponent)
   }
 
+  func testSelectedFolderScopeIsActiveBeforeCreatingPersistentBookmark() throws {
+    enum ProbeError: Error { case inactiveScope }
+    final class Probe {
+      var calls: [String] = []
+      var active = false
+    }
+    let probe = Probe()
+    let operations = SecurityScopedResourceOperations(
+      startAccessing: { _ in
+        probe.calls.append("start")
+        probe.active = true
+        return true
+      },
+      stopAccessing: { _ in
+        probe.calls.append("stop")
+        probe.active = false
+      },
+      createBookmark: { _, _ in
+        probe.calls.append("bookmark")
+        guard probe.active else { throw ProbeError.inactiveScope }
+        return Data("bookmark".utf8)
+      })
+
+    XCTAssertNoThrow(
+      try SecurityScopedPath(
+        url: URL(fileURLWithPath: "/selected/folder", isDirectory: true),
+        accessMode: .readWrite,
+        operations: operations))
+    XCTAssertEqual(probe.calls, ["start", "bookmark", "stop"])
+  }
+
   private func manifest(
     runID: String,
     state: WorkflowRunState,

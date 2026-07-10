@@ -60,30 +60,28 @@ final class WorkshopWorkflowSession: ObservableObject {
     }
   #endif
 
-  func selectModel(_ url: URL, into store: WorkshopStore) async {
+  func selectModel(_ path: SecurityScopedPath, into store: WorkshopStore) async {
     guard store.canChangeSelection else { return }
     do {
-      let path = try SecurityScopedPath(url: url, accessMode: .readOnly)
       try save(path, key: BookmarkKey.model)
       modelAccess = try path.resolve()
       inspectedSelection = nil
-      store.selectModelDirectory(modelAccess?.url ?? url)
+      store.selectModelDirectory(modelAccess?.url ?? URL(fileURLWithPath: path.displayPath))
       await inspectIfReady(store)
     } catch {
       store.selectionFailed(.selectingModel, message: error.localizedDescription)
     }
   }
 
-  func selectWorkspace(_ url: URL, into store: WorkshopStore) async {
+  func selectWorkspace(_ path: SecurityScopedPath, into store: WorkshopStore) async {
     guard store.canChangeSelection else { return }
     do {
-      let path = try SecurityScopedPath(url: url, accessMode: .readWrite)
       try save(path, key: BookmarkKey.workspace)
       workspaceAccess = try path.resolve()
       client = nil
       clientWorkspaceURL = nil
       pendingPlans.removeAll()
-      store.selectRunWorkspace(workspaceAccess?.url ?? url)
+      store.selectRunWorkspace(workspaceAccess?.url ?? URL(fileURLWithPath: path.displayPath))
       await refreshHost(store)
       await recoverWorkspaceRuns(store)
       await inspectIfReady(store)
