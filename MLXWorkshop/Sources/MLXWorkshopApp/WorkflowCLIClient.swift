@@ -254,6 +254,17 @@ actor WorkflowCLIClient {
     for key in ["HOME", "TMPDIR"] {
       if let value = inherited[key] { explicitEnvironment[key] = value }
     }
+    #if DEBUG
+      let testSentinel = runtime.sourceWorkspaceURL.appendingPathComponent(
+        "tests/helpers/workflow_fake_stage.py")
+      if inherited["MLX_WORKFLOW_TEST_MODE"] == "1",
+        fileManager.fileExists(atPath: testSentinel.path),
+        let testMemory = inherited["MLX_WORKFLOW_TEST_HOST_MEMORY_BYTES"]
+      {
+        explicitEnvironment["MLX_WORKFLOW_TEST_MODE"] = "1"
+        explicitEnvironment["MLX_WORKFLOW_TEST_HOST_MEMORY_BYTES"] = testMemory
+      }
+    #endif
     environment = explicitEnvironment
   }
 

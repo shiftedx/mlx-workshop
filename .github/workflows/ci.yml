@@ -13,6 +13,9 @@ jobs:
   verify:
     runs-on: macos-15
     timeout-minutes: 45
+    env:
+      MLX_WORKFLOW_TEST_MODE: "1"
+      MLX_WORKFLOW_TEST_HOST_MEMORY_BYTES: "68719476736"
     steps:
       - uses: actions/checkout@v6
         with:

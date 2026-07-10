@@ -50,7 +50,9 @@ def _mtplx_version() -> str | None:
 
 def _apple_hardware() -> dict[str, Any]:
     chip = _command_output(["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"])
-    memory = _command_output(["/usr/sbin/sysctl", "-n", "hw.memsize"])
+    memory = _test_memory_fixture() or _command_output(
+        ["/usr/sbin/sysctl", "-n", "hw.memsize"]
+    )
     try:
         memory_bytes = int(memory) if memory else None
     except ValueError:
@@ -61,6 +63,24 @@ def _apple_hardware() -> dict[str, Any]:
         "logical_cpu_count": os.cpu_count(),
         "machine": platform.machine(),
     }
+
+
+def _test_memory_fixture() -> str | None:
+    """Return a deterministic memory fixture only from a source test checkout.
+
+    The release runtime excludes ``tests/helpers``, and the Release Swift client
+    never forwards these variables. This keeps production planning bound to the
+    real sysctl observation while making host-fit tests portable to small CI Macs.
+    """
+    sentinel = Path(__file__).resolve().parents[1] / "tests" / "helpers" / "workflow_fake_stage.py"
+    if os.environ.get("MLX_WORKFLOW_TEST_MODE") != "1" or not sentinel.is_file():
+        return None
+    raw = os.environ.get("MLX_WORKFLOW_TEST_HOST_MEMORY_BYTES")
+    try:
+        value = int(raw) if raw is not None else 0
+    except ValueError:
+        return None
+    return str(value) if value > 0 else None
 
 
 def _power_snapshot() -> dict[str, Any]:
