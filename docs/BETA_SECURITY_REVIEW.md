@@ -16,6 +16,13 @@ CPython 3.11.14 environment with hash-locked dependencies. A generated manifest
 records every runtime file; the app verifies the manifest and critical entry points
 before execution, and release verification re-hashes the complete runtime.
 
+Packaged end-to-end testing found that the executor's intentionally minimized child
+environment did not preserve the top-level bytecode-suppression flag. A real MLX-LM
+conversion could therefore create import caches inside the signed runtime. The
+executor now forces `PYTHONDONTWRITEBYTECODE=1` for every allowlisted child, the
+normal conversion-path fixture asserts the setting, and a real conversion through
+the embedded runtime must leave the complete file manifest unchanged.
+
 The remaining distribution issue is trust, not application logic: this machine has
 no Developer ID Application identity or notarization profile. An ad-hoc signed build
 is useful for local QA but must not be distributed as a friend-installable release.
@@ -52,6 +59,8 @@ must validate it before replacing saved access.
   are included in release resources.
 - The public repository is built from an explicit allowlist and scanned for large
   artifacts, private directories, workstation paths, and token-shaped values.
+- Every Python workflow child is prevented from writing bytecode into the signed,
+  hash-locked bundled runtime.
 
 ## Release gates
 

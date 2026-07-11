@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 app_path="${1:-$repo_root/MLXWorkshop/build/Release/MLX Workshop.app}"
-dmg_path="${2:-$repo_root/MLXWorkshop/build/Release/MLX-Workshop-0.1.0-beta.1-arm64.dmg}"
+dmg_path="${2:-$repo_root/MLXWorkshop/build/Release/MLX-Workshop-0.1.0-beta.2-arm64.dmg}"
 
 "$repo_root/scripts/release/verify_public_release.sh" "$app_path"
 "$repo_root/scripts/release/verify_macos_dmg.sh" "$dmg_path"

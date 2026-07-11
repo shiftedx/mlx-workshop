@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "runtime_id": "mlx-workshop-runtime-0.1.0-beta.1-arm64",
+  "runtime_id": "mlx-workshop-runtime-0.1.0-beta.2-arm64",
   "status": "design-lock-not-yet-bundled",
   "platform": {
     "architecture": "arm64",
@@ -27,7 +27,7 @@
     "scripts/mlx_workflow_cli.py": "b9cdef85fcc29ed624d04ff4aa878b8fc12ed1ab9852b5c4fb017cf3d0f9e848",
     "scripts/workflow_behavior.py": "27affe119be86c9053e95c0b18fa46d3de372531689c0b850262a3377d97cda9",
     "scripts/workflow_behavior_executor.py": "85fdc98b190df9d1971a2dee7a986511d5cb374b3448ed898b7a380269b45d32",
-    "scripts/workflow_executor.py": "f2abe1c8a9a35521484927b4c0424848ad1c06e21a0534cb905c7b63ad7c5372",
+    "scripts/workflow_executor.py": "580d6037006b56db9ccc95bab54c0c248f11a2d2b54a6ad5b7441e0015699039",
     "scripts/workflow_host.py": "3dddfd23c4b8e82ed9a25bc8eac3915eeeb251e547493f0b300109b3c4228b00",
     "scripts/workflow_mixed_precision.py": "b27038b3a9075a4c01e4e09870351348f9d9c61f2294889ddae1e663d99fd08b",
     "scripts/workflow_plan.py": "e9761ee8566e2bca154e29373077ade3d280e88cb9a6b927738286cde2136af8",

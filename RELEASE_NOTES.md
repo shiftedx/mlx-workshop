@@ -1,4 +1,4 @@
-# MLX Workshop 0.1.0-beta.1
+# MLX Workshop 0.1.0-beta.2
 
 > **Source prerelease.** The DMG is intentionally withheld until its Developer ID
 > signature, notarization, stapling, and Gatekeeper checks pass. Do not redistribute
@@ -27,6 +27,8 @@ Verification evidence:
 - Real tiny-model conversion with source immutability and three hashed qualification gates
 - Real measured tiny-model mixed-precision analysis and reloadable materialization
 - Fully hash-manifested 70-package bundled runtime with import/host smoke tests
+- Real end-to-end conversion through the runtime embedded in the Release app, with
+  a regression gate proving child inference cannot write bytecode into the signed bundle
 - arm64 Release bundle, sandbox/privacy checks, and verified drag-to-Applications DMG
 
 Completion is not qualification. The app keeps those states visually and

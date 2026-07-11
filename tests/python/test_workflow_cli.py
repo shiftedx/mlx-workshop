@@ -1342,6 +1342,10 @@ class WorkflowCLITests(unittest.TestCase):
             )
             self.assertTrue((run_dir / "logs" / "fixture.stdout.log").is_file())
             self.assertTrue((run_dir / "logs" / "fixture.stderr.log").is_file())
+            self.assertIn(
+                "bytecode writes disabled: True",
+                (run_dir / "logs" / "fixture.stdout.log").read_text(encoding="utf-8"),
+            )
             commands = json.loads((run_dir / "commands.json").read_text(encoding="utf-8"))
             self.assertIsInstance(commands["commands"][0]["arguments"], list)
             self.assertEqual(before, sha256(source))

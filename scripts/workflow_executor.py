@@ -580,6 +580,9 @@ def _execute_step(writer: JournalWriter, step: dict[str, Any]) -> tuple[str, int
         for key in step["environment_keys"]
         if key in os.environ and not SECRET_KEY.search(key)
     }
+    # The bundled runtime is hash-locked and lives inside the signed app. Never let
+    # an allowlisted Python child mutate it by materializing import caches.
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
     interrupted = False
     previous_handler = signal.getsignal(signal.SIGINT)
 

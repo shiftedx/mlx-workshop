@@ -19,6 +19,10 @@ def main() -> int:
 
     if args.scenario in {"success", "warning"}:
         print("fixture midpoint", flush=True)
+        print(
+            f"bytecode writes disabled: {os.environ.get('PYTHONDONTWRITEBYTECODE') == '1'}",
+            flush=True,
+        )
         if args.scenario == "warning":
             print("api_key=fixture-secret", file=sys.stderr, flush=True)
         artifact = args.run_dir / "artifacts" / "candidate"

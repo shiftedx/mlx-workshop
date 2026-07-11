@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-beta.1 — Unreleased binary
+## 0.1.0-beta.2 — Unreleased binary
 
 - Plain-language folder setup and a state-driven five-step conversion/release guide.
 - Live Compare surface with parent-relative evidence, honest optional metrics, and
@@ -20,5 +20,8 @@
 - Real deterministic tiny-Llama conversion and hashed three-gate qualification proof.
 - Self-contained arm64 CPython 3.11, MLX 0.31.2, MLX-LM 0.31.3, and MLX-VLM 0.6.3 runtime.
 - Complete runtime-manifest, sandbox, privacy-manifest, DMG, and release-verifier tooling.
+- Prevent Python conversion children from materializing bytecode inside the signed,
+  hash-locked app runtime.
+- Accept normalized relative destinations in the public-source staging tool.
 
 The public binary remains unreleased until Developer ID signing and Apple notarization pass.

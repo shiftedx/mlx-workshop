@@ -50,8 +50,8 @@ build_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info")"
 minimum_os="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info")"
 
 [[ "$bundle_id" == "com.cozylabs.MLXWorkshop" ]] || { echo "FAIL: unexpected bundle id: $bundle_id" >&2; exit 1; }
-[[ "$short_version" == "0.1.0-beta.1" ]] || { echo "FAIL: unexpected version: $short_version" >&2; exit 1; }
-[[ "$build_version" == "1" ]] || { echo "FAIL: unexpected build: $build_version" >&2; exit 1; }
+[[ "$short_version" == "0.1.0-beta.2" ]] || { echo "FAIL: unexpected version: $short_version" >&2; exit 1; }
+[[ "$build_version" == "2" ]] || { echo "FAIL: unexpected build: $build_version" >&2; exit 1; }
 [[ "$minimum_os" == "14.0" ]] || { echo "FAIL: unexpected minimum macOS: $minimum_os" >&2; exit 1; }
 
 plutil -lint "$info" "$privacy" >/dev/null

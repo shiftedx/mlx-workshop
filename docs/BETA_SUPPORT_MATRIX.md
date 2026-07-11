@@ -15,7 +15,7 @@ compatible or that an experimental candidate is safe to promote.
 | MTPLX compatibility | Read-only local `mtplx inspect --require-mtp --json` | Capability check | Never starts, stops, or reconfigures an MTPLX daemon |
 | Host snapshot | Chip, memory, disk, runtime versions, power/thermal context, and sanitized MLX-related workload names | Supported and read-only | Active workloads are reported, never stopped |
 | Unknown tensor semantics, native FP8 inputs, unknown architectures, or missing adapters | Explicit blocker with remediation guidance | Supported fail-closed outcome | No conversion is attempted |
-| Generated tiny dense Llama fixture | Real MXFP4 conversion, reload/generation, parent immutability, mixed-precision measurement, and qualification | Required CI/reference evidence; no quality claim | Tiny and deterministic, not representative of model quality |
+| Generated tiny dense Llama fixture | Real MXFP4 conversion, reload/generation, parent immutability, mixed-precision measurement, qualification, and a second full run through the bundled Release-app runtime without manifest drift | Required CI/reference evidence; no quality claim | Tiny and deterministic, not representative of model quality |
 
 Beta v1 does not claim universal model compatibility, automatic vision grafting,
 automatic MTP packaging, canonical-model replacement, behavior-edit promotion, or

@@ -2,6 +2,7 @@
 
 Date: 2026-07-10  
 Protocol: MLX Workflow Local Protocol v1  
+Release candidate: **0.1.0-beta.2**
 Readiness verdict: **source beta ready; friend-installable binary pending Apple trust credentials**
 
 ## Executive verdict
@@ -21,15 +22,23 @@ can be assembled into a read-only DMG with an Applications shortcut. The public
 source tree is separately allowlisted and scanned so local models, run outputs,
 credentials, and workstation paths are excluded.
 
+The final packaged-runtime campaign also exposed and closed a bundle-integrity bug:
+the executor's minimized child environment had dropped bytecode suppression before
+launching MLX-LM. Conversion children now force `PYTHONDONTWRITEBYTECODE=1`; the
+Release app completed a real tiny-model conversion, qualification, and staging run
+without changing a single manifest-tracked runtime file. The release gate retains a
+regression test for that invariant.
+
 Measured mixed-precision analysis/materialization, reviewed behavior experiments,
 vision smoke testing, and read-only MTPLX compatibility inspection are now live
 surfaces. They retain narrower classifications: mixed and behavior candidates remain
 experimental/unqualified, vision is a smoke test rather than grafting, and MTPLX
 inspection never manages the daemon.
 
-One external macOS distribution gate remains. This machine has no Developer ID
-Application certificate or configured notarization profile, so the DMG cannot yet
-pass Gatekeeper on friends' Macs. Native XCUITest automation now launches and covers
+One external macOS distribution gate remains. This machine has only an Apple
+Development identity, not a Developer ID Application certificate, and has no
+configured notarization profile, so the DMG cannot yet pass Gatekeeper on friends'
+Macs. Native XCUITest automation now launches and covers
 the setup screen plus the complete supported conversion and verification journey.
 The full VoiceOver and keyboard checklist remains manual.
 
@@ -60,12 +69,17 @@ outside this beta.
 - Swift: 101 unit and integration tests.
 - Native UI: 2 XCUITests, including the full deterministic navigation and action journey.
 - Real reference run: tiny dense Llama to MXFP4, with three qualification gates.
+- Packaged-runtime reference: the same real conversion, qualification, and immutable
+  staging route executed through the Python and workflow driver embedded in the
+  Release app, followed by a clean full-manifest recheck.
 - Real experimental reference: measured mixed-precision analysis and reloadable materialization on the tiny dense Llama fixture.
 - Runtime: exact CPython 3.11.14 and fully hash-locked Python dependencies; every
   bundled file is recorded in `runtime-manifest.json`.
 - Release app: arm64, macOS 14+, sandboxed, privacy manifest and legal notices
   bundled, runtime integrity checked at launch.
 - DMG: read-only image, Applications link, and image checksum verified.
+- Distribution trust: correctly blocked because Developer ID Application signing and
+  notarization authority are unavailable on this machine.
 - Static gates: Python compilation, Swift formatting, shell syntax, JSON/plist
   validation, package contract, and sanitized-public-tree contract.
 
@@ -74,6 +88,17 @@ The detailed capability boundary is in
 [docs/BETA_SECURITY_REVIEW.md](docs/BETA_SECURITY_REVIEW.md), and the remaining
 interactive checks in
 [docs/BETA_MANUAL_QA_CHECKLIST.md](docs/BETA_MANUAL_QA_CHECKLIST.md).
+
+## Local release artifacts
+
+- App: `MLXWorkshop/build/Release/MLX Workshop.app` (`0.1.0-beta.2`, build 2,
+  arm64, ad-hoc signed for local QA)
+- DMG: `MLX-Workshop-0.1.0-beta.2-arm64.dmg` (281 MiB)
+- DMG SHA-256: `7682a418ca83fb20a74b654e0fa33000e2e9d33eb8eec5486a113b03c77179b4`
+
+The DMG is a verified local QA artifact, not a distributable friend-installable
+binary. Rebuild it with Developer ID signing, notarize, staple, and rerun the
+distribution gate before attaching it to a public release.
 
 ## Build and test
 

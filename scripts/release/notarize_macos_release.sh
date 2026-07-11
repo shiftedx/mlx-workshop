@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 app_path="${1:-$repo_root/MLXWorkshop/build/Release/MLX Workshop.app}"
-dmg_path="${2:-$repo_root/MLXWorkshop/build/Release/MLX-Workshop-0.1.0-beta.1-arm64.dmg}"
+dmg_path="${2:-$repo_root/MLXWorkshop/build/Release/MLX-Workshop-0.1.0-beta.2-arm64.dmg}"
 profile="${NOTARYTOOL_PROFILE:?set NOTARYTOOL_PROFILE to a notarytool keychain profile}"
 
 signature="$(codesign -dvvv "$app_path" 2>&1)"
